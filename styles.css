@@ -1,0 +1,741 @@
+/* STRIVO PLATFORM // DESIGN SYSTEM & VARIABLES */
+:root {
+    --bg-main: #040711;
+    --bg-surface: #0a0f24;
+    --bg-card: rgba(10, 15, 36, 0.65);
+    --border-color: rgba(6, 182, 212, 0.12);
+    --border-hover: rgba(6, 182, 212, 0.35);
+    
+    --color-cyan: #06b6d4;
+    --color-cyan-glow: rgba(6, 182, 212, 0.25);
+    --color-emerald: #10b981;
+    --color-emerald-glow: rgba(16, 185, 129, 0.2);
+    --color-amber: #f59e0b;
+    --color-amber-glow: rgba(245, 158, 11, 0.2);
+    --color-rose: #f43f5e;
+    
+    --text-primary: #f4f4f5;
+    --text-secondary: #a1a1aa;
+    --text-muted: #52525b;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    overflow-x: hidden;
+}
+
+.font-mono {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: var(--bg-main);
+}
+::-webkit-scrollbar-thumb {
+    background: #111827;
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--color-cyan);
+}
+
+/* Glassmorphism Cards */
+.glass-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    backdrop-filter: blur(12px);
+    border-radius: 12px;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+    border-color: var(--border-hover);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 15px var(--color-cyan-glow);
+}
+
+/* Sidebar Navigation */
+.sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    transition: all 0.2s ease;
+    border-left: 2px solid transparent;
+}
+
+.sidebar-link:hover {
+    background: rgba(6, 182, 212, 0.05);
+    color: var(--text-primary);
+}
+
+.sidebar-link.active {
+    background: rgba(6, 182, 212, 0.08);
+    color: var(--text-primary);
+    border-left-color: var(--color-cyan);
+}
+
+/* Debug / Simulator Bar */
+.debug-bar {
+    background: rgba(5, 5, 10, 0.85);
+    border-bottom: 1px dashed rgba(245, 158, 11, 0.25);
+    backdrop-filter: blur(8px);
+    z-index: 1000;
+}
+
+/* CRM / Kanban Board */
+.kanban-column {
+    min-height: 450px;
+    background: rgba(5, 7, 20, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    padding: 12px;
+    transition: all 0.2s ease;
+}
+
+.kanban-column.drag-over {
+    background: rgba(6, 182, 212, 0.04);
+    border-color: rgba(6, 182, 212, 0.25);
+}
+
+.lead-card {
+    background: rgba(13, 20, 41, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    padding: 14px;
+    cursor: grab;
+    transition: all 0.2s ease;
+}
+
+.lead-card:active {
+    cursor: grabbing;
+}
+
+.lead-card:hover {
+    border-color: var(--color-cyan);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    transform: translateY(-1px);
+}
+
+/* Modais Overlay */
+.modal-overlay {
+    background: rgba(2, 3, 8, 0.85);
+    backdrop-filter: blur(8px);
+}
+
+/* Notification Alerts & Badges */
+.badge-diretoria {
+    background: rgba(6, 182, 212, 0.1);
+    color: var(--color-cyan);
+    border: 1px solid rgba(6, 182, 212, 0.2);
+}
+.badge-lideranca {
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--color-amber);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+}
+.badge-agente {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--color-emerald);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+/* Grid & Layout elements */
+.dotted-grid {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 20px 20px;
+}
+
+/* Loader Animation */
+.loader-spin {
+    border: 2px solid rgba(255, 255, 255, 0.05);
+    border-top-color: var(--color-cyan);
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Table Design */
+.strivo-table th {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.strivo-table td {
+    font-size: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.strivo-table tr:hover td {
+    background: rgba(255, 255, 255, 0.01);
+}
+
+/* Pulse Glow Keyframes */
+@keyframes pulseGlow {
+    0%, 100% {
+        box-shadow: 0 0 15px rgba(6, 182, 212, 0.1);
+    }
+    50% {
+        box-shadow: 0 0 25px rgba(6, 182, 212, 0.25);
+    }
+}
+
+.pulse-glow {
+    animation: pulseGlow 2.5s infinite ease-in-out;
+}
+
+/* LIGHT THEME VARIABLES & OVERRIDES */
+body.light-theme {
+    --bg-main: #f8fafc;
+    --bg-surface: #ffffff;
+    --bg-card: rgba(255, 255, 255, 0.85);
+    --border-color: rgba(217, 119, 6, 0.15);
+    --border-hover: rgba(217, 119, 6, 0.4);
+    
+    --color-cyan: #d97706; /* Dourado / Amber */
+    --color-cyan-glow: rgba(217, 119, 6, 0.15);
+    --color-emerald: #059669;
+    --color-emerald-glow: rgba(5, 150, 105, 0.1);
+    --color-amber: #b45309;
+    --color-amber-glow: rgba(180, 83, 9, 0.1);
+    --color-rose: #e11d48;
+    
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+}
+
+body.light-theme {
+    background-color: var(--bg-main) !important;
+    color: var(--text-primary) !important;
+}
+
+body.light-theme .dotted-grid {
+    background-image: radial-gradient(rgba(217, 119, 6, 0.05) 1px, transparent 1px) !important;
+}
+
+body.light-theme text {
+    fill: var(--text-primary) !important;
+}
+
+body.light-theme aside {
+    background-color: var(--bg-surface) !important;
+    border-right-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+body.light-theme .sidebar-link {
+    color: var(--text-secondary) !important;
+}
+
+body.light-theme .sidebar-link.active {
+    background: rgba(217, 119, 6, 0.08) !important;
+    color: var(--text-primary) !important;
+    border-left-color: var(--color-cyan) !important;
+}
+
+body.light-theme .sidebar-link:hover {
+    background: rgba(217, 119, 6, 0.05) !important;
+    color: var(--text-primary) !important;
+}
+
+body.light-theme #sidebar-user-info {
+    background-color: rgba(0, 0, 0, 0.02) !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+body.light-theme #sidebar-user-info .text-white {
+    color: var(--text-primary) !important;
+}
+
+body.light-theme h2, body.light-theme h3, body.light-theme h4 {
+    color: var(--text-primary) !important;
+}
+
+body.light-theme p {
+    color: var(--text-secondary) !important;
+}
+
+body.light-theme .text-white {
+    color: var(--text-primary) !important;
+}
+
+body.light-theme .text-zinc-100 {
+    color: var(--text-primary) !important;
+}
+
+body.light-theme .text-zinc-200 {
+    color: var(--text-primary) !important;
+}
+
+body.light-theme .text-zinc-300 {
+    color: var(--text-primary) !important;
+}
+
+body.light-theme .text-zinc-400 {
+    color: var(--text-secondary) !important;
+}
+
+body.light-theme .text-zinc-500 {
+    color: var(--text-muted) !important;
+}
+
+body.light-theme .border-zinc-900 {
+    border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+body.light-theme .border-zinc-800 {
+    border-color: rgba(217, 119, 6, 0.12) !important;
+}
+
+body.light-theme .border-zinc-850 {
+    border-color: rgba(217, 119, 6, 0.12) !important;
+}
+
+body.light-theme .bg-zinc-900\/50 {
+    background-color: rgba(0, 0, 0, 0.02) !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+body.light-theme .bg-slate-950\/20 {
+    background-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+body.light-theme .bg-slate-950\/40 {
+    background-color: var(--bg-card) !important;
+    border-color: rgba(217, 119, 6, 0.15) !important;
+}
+
+body.light-theme .bg-slate-950\/80 {
+    background-color: var(--bg-surface) !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+body.light-theme .bg-slate-950 {
+    background-color: var(--bg-surface) !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+body.light-theme .bg-slate-900\/40 {
+    background-color: rgba(0, 0, 0, 0.015) !important;
+    border-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+body.light-theme .bg-slate-900\/60 {
+    background-color: rgba(0, 0, 0, 0.015) !important;
+    border-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+body.light-theme .bg-slate-900\/80 {
+    background-color: #ffffff !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+body.light-theme .bg-slate-900 {
+    background-color: #ffffff !important;
+    border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+body.light-theme input, body.light-theme select {
+    background-color: #ffffff !important;
+    border-color: rgba(0, 0, 0, 0.15) !important;
+    color: var(--text-primary) !important;
+}
+
+body.light-theme .bg-zinc-950 {
+    background-color: #ffffff !important;
+    border-color: rgba(0, 0, 0, 0.1) !important;
+    color: var(--text-primary) !important;
+}
+
+body.light-theme .modal-overlay > div {
+    background-color: #ffffff !important;
+    border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+body.light-theme #upload-processing-logs {
+    background-color: #ffffff !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+body.light-theme .debug-bar {
+    background: rgba(255, 255, 255, 0.9) !important;
+    border-bottom: 1px dashed rgba(217, 119, 6, 0.25) !important;
+}
+
+body.light-theme .kanban-column {
+    background: rgba(241, 245, 249, 0.6) !important;
+    border: 1px solid rgba(217, 119, 6, 0.08) !important;
+}
+
+body.light-theme .kanban-column.drag-over {
+    background: rgba(217, 119, 6, 0.04) !important;
+    border-color: rgba(217, 119, 6, 0.25) !important;
+}
+
+body.light-theme .lead-card {
+    background: #ffffff !important;
+    border: 1px solid rgba(217, 119, 6, 0.1) !important;
+}
+
+body.light-theme .strivo-table th {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+
+body.light-theme .strivo-table td {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.03) !important;
+}
+
+body.light-theme .strivo-table tr:hover td {
+    background: rgba(0, 0, 0, 0.01) !important;
+}
+
+body.light-theme .loader-spin {
+    border: 2px solid rgba(0, 0, 0, 0.05) !important;
+    border-top-color: var(--color-cyan) !important;
+}
+
+body.light-theme ::-webkit-scrollbar-thumb {
+    background: #cbd5e1 !important;
+}
+body.light-theme ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-cyan) !important;
+}
+
+/* Strivo logo responsive theme rules */
+body.light-theme .strivo-logo-dark {
+    display: none !important;
+}
+body.light-theme .strivo-logo-light {
+    display: block !important;
+}
+
+/* Light theme border override for logo container */
+body.light-theme .strivo-logo-container {
+    border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+/* CRM View Toggle Control Styles */
+.crm-view-toggle {
+    display: inline-flex;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 3px;
+}
+
+body.light-theme .crm-view-toggle {
+    background: rgba(0, 0, 0, 0.03);
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+.view-toggle-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 6px 12px;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+}
+
+.view-toggle-btn.active {
+    background: rgba(6, 182, 212, 0.15);
+    color: var(--color-cyan);
+    border: 1px solid rgba(6, 182, 212, 0.2);
+}
+
+body.light-theme .view-toggle-btn.active {
+    background: rgba(217, 119, 6, 0.15);
+    color: var(--color-cyan);
+    border-color: rgba(217, 119, 6, 0.2);
+}
+
+/* Tasks & Next Steps Lists styles */
+.task-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    transition: all 0.2s ease;
+}
+
+body.light-theme .task-item {
+    background: rgba(0, 0, 0, 0.015);
+    border-color: rgba(0, 0, 0, 0.05);
+}
+
+.task-item.completed {
+    opacity: 0.65;
+}
+
+.task-text-completed {
+    text-decoration: line-through;
+    color: var(--text-muted);
+}
+
+/* Attachments Layout styles */
+.attachment-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: rgba(6, 182, 212, 0.04);
+    border: 1px solid rgba(6, 182, 212, 0.1);
+    border-radius: 6px;
+    margin-bottom: 6px;
+}
+
+body.light-theme .attachment-item {
+    background: rgba(217, 119, 6, 0.04);
+    border-color: rgba(217, 119, 6, 0.1);
+}
+
+.attachment-name {
+    font-size: 11px;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.attachment-meta {
+    font-size: 9px;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* Premium Status Badges */
+.status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    border-radius: 4px;
+    border: 1px solid transparent;
+}
+
+/* Dark Mode (Default) status badge colors */
+.status-badge.badge-blue {
+    background: rgba(30, 58, 138, 0.4);
+    color: #60a5fa;
+    border-color: rgba(30, 58, 138, 0.6);
+}
+.status-badge.badge-purple {
+    background: rgba(88, 28, 135, 0.4);
+    color: #c084fc;
+    border-color: rgba(88, 28, 135, 0.6);
+}
+.status-badge.badge-amber {
+    background: rgba(120, 53, 4, 0.4);
+    color: #fbbf24;
+    border-color: rgba(120, 53, 4, 0.6);
+}
+.status-badge.badge-cyan {
+    background: rgba(8, 145, 178, 0.4);
+    color: #22d3ee;
+    border-color: rgba(8, 145, 178, 0.6);
+}
+.status-badge.badge-emerald {
+    background: rgba(6, 95, 70, 0.4);
+    color: #34d399;
+    border-color: rgba(6, 95, 70, 0.6);
+}
+.status-badge.badge-zinc {
+    background: rgba(63, 63, 70, 0.4);
+    color: #a1a1aa;
+    border-color: rgba(63, 63, 70, 0.6);
+}
+
+/* Light Mode high contrast overrides */
+body.light-theme .status-badge.badge-blue {
+    background: #eff6ff !important;
+    color: #1d4ed8 !important;
+    border-color: #bfdbfe !important;
+}
+body.light-theme .status-badge.badge-purple {
+    background: #faf5ff !important;
+    color: #7e22ce !important;
+    border-color: #e9d5ff !important;
+}
+body.light-theme .status-badge.badge-amber {
+    background: #fffbeb !important;
+    color: #b45309 !important;
+    border-color: #fde68a !important;
+}
+body.light-theme .status-badge.badge-cyan {
+    background: #ecfeff !important;
+    color: #0369a1 !important;
+    border-color: #bae6fd !important;
+}
+body.light-theme .status-badge.badge-emerald {
+    background: #ecfdf5 !important;
+    color: #047857 !important;
+    border-color: #a7f3d0 !important;
+}
+body.light-theme .status-badge.badge-zinc {
+    background: #f4f4f5 !important;
+    color: #71717a !important;
+    border-color: #e4e4e7 !important;
+}
+
+/* ========== PIPELINE PYRAMID ========== */
+.pyramid-stack {
+    width: 100%;
+    max-width: 700px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+}
+
+.pyramid-layer {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 64px;
+    transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: default;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.pyramid-layer:last-child {
+    border-bottom: none;
+}
+
+.pyramid-layer:hover {
+    transform: scaleX(1.03);
+    filter: brightness(1.15);
+    z-index: 2;
+}
+
+.pyramid-layer-inner {
+    position: absolute;
+    inset: 0;
+    border-radius: 4px;
+    opacity: 0.85;
+    transition: opacity 0.3s ease;
+}
+
+.pyramid-layer:hover .pyramid-layer-inner {
+    opacity: 1;
+}
+
+.pyramid-layer-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0 24px;
+    gap: 12px;
+}
+
+.pyramid-layer-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    white-space: nowrap;
+}
+
+.pyramid-layer-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 800;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+
+.pyramid-layer-leads {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: rgba(255,255,255,0.7);
+    white-space: nowrap;
+}
+
+/* Pyramid gradient backgrounds for each badge color */
+.pyramid-bg-blue { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #1e40af 100%); }
+.pyramid-bg-purple { background: linear-gradient(135deg, #6b21a8 0%, #a855f7 50%, #6b21a8 100%); }
+.pyramid-bg-amber { background: linear-gradient(135deg, #92400e 0%, #f59e0b 50%, #92400e 100%); }
+.pyramid-bg-emerald { background: linear-gradient(135deg, #065f46 0%, #10b981 50%, #065f46 100%); }
+.pyramid-bg-cyan { background: linear-gradient(135deg, #155e75 0%, #06b6d4 50%, #155e75 100%); }
+.pyramid-bg-zinc { background: linear-gradient(135deg, #3f3f46 0%, #71717a 50%, #3f3f46 100%); }
+
+/* Shimmer animation on pyramid */
+.pyramid-layer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 4px;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 50%, transparent 100%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+.pyramid-layer:hover::after {
+    opacity: 1;
+    animation: pyramidShimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes pyramidShimmer {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+}
+
+/* Progress bar in pipeline detail table */
+.pipeline-progress-bar {
+    height: 6px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 999px;
+    overflow: hidden;
+    min-width: 120px;
+}
+
+.pipeline-progress-fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Light theme overrides for pipeline */
+body.light-theme .pyramid-layer-label,
+body.light-theme .pyramid-layer-value {
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+body.light-theme .pipeline-progress-bar {
+    background: rgba(0,0,0,0.08);
+}
+

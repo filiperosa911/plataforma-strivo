@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STRIVO // Plataforma de Distribuição Comercial</title>
+    
+    <!-- Tailwind CSS for utility grids and layout -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Custom Design Tokens and classes -->
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-[#040711] text-zinc-100 min-h-screen dotted-grid selection:bg-cyan-500/30 selection:text-white pb-12">
+
+    <!-- SIMULATOR CONTROLLER (DEBUG BAR) -->
+    <div class="debug-bar fixed top-0 left-0 w-full h-[54px] px-6 flex items-center justify-between z-50">
+        <div class="flex items-center gap-3">
+            <span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+            <span class="font-mono text-[10px] text-amber-500 tracking-widest uppercase font-bold">
+                SIMULADOR DE SISTEMA // PERMISSÕES ATIVAS
+            </span>
+        </div>
+        <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2">
+                <label for="debug-user-select" class="font-mono text-[9px] text-zinc-500 uppercase">Usuário de Simulação:</label>
+                <select id="debug-user-select" onchange="const u = db.users.find(x => x.id === parseInt(this.value)); selectDebugRole(u.role, u.id);" 
+                    class="bg-zinc-950 text-zinc-300 border border-zinc-800 rounded px-3 py-1 font-mono text-xs focus:outline-none focus:border-amber-500/50">
+                    <!-- Populated dynamically -->
+                </select>
+            </div>
+            <button onclick="toggleTheme()" class="bg-zinc-950 text-zinc-300 border border-zinc-800 rounded px-3 py-1 font-mono text-xs hover:border-amber-500/50 flex items-center gap-1.5 transition-colors">
+                <span id="theme-toggle-icon">☀️ Modo Claro</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- MAIN APP STRUCTURE -->
+    <div class="flex pt-[54px] min-h-screen">
+        
+        <!-- SIDEBAR -->
+        <aside class="w-[260px] border-r border-zinc-900 bg-[#060a1a]/40 p-6 flex flex-col justify-between shrink-0 hidden md:flex">
+            <div class="space-y-8">
+                <!-- Branding Strivo Logo -->
+                <div class="strivo-logo-container pb-5 border-b border-zinc-900/60">
+                    <img src="assets/logo1-strivo.png" alt="Strivo Gestão de Recursos" class="strivo-logo-dark w-[185px] h-auto block">
+                    <img src="assets/logo2-strivo.png" alt="Strivo Gestão de Recursos" class="strivo-logo-light w-[185px] h-auto hidden">
+                </div>
+
+                <!-- Session User Block -->
+                <div id="sidebar-user-info" class="bg-slate-950/60 border border-zinc-900 p-4 rounded-lg">
+                    <!-- Populated dynamically -->
+                </div>
+
+                <!-- Navigation Links -->
+                <nav class="flex flex-col gap-2">
+                    <a href="#" data-target="dashboard" class="sidebar-link active">
+                        <span>📊</span> Painel Geral
+                    </a>
+                    <a href="#" data-target="crm" class="sidebar-link">
+                        <span>🎯</span> Funil CRM
+                    </a>
+                    <a href="#" data-target="pipeline" class="sidebar-link">
+                        <span>📈</span> Pipeline
+                    </a>
+                    <a href="#" data-target="financial" class="sidebar-link">
+                        <span>⚙️</span> Motor Rateios
+                    </a>
+                    <a href="#" data-target="approvals" class="sidebar-link">
+                        <span>🛡️</span> Aprovações
+                    </a>
+                    <a href="#" data-target="partnerships" class="sidebar-link">
+                        <span>💼</span> Parcerias / Cadastro
+                    </a>
+                    <a href="#" data-target="settings" id="sidebar-link-settings" class="sidebar-link hidden">
+                        <span>⚙️</span> Ajustes Funil
+                    </a>
+                </nav>
+            </div>
+
+            <!-- Footer Meta -->
+            <div class="font-mono text-[8px] text-zinc-600 space-y-1">
+                <p>VERTIC TECH SYSTEM © 2026</p>
+                <p>OS_STRIVO_v1.0_PROTOTYPE</p>
+            </div>
+        </aside>
+
+        <!-- CONTENT AREA -->
+        <main class="flex-1 p-6 md:p-10 overflow-y-auto">
+            
+            <!-- ================= view-dashboard ================= -->
+            <div id="view-dashboard" class="app-view space-y-8">
+                <!-- Heading -->
+                <div class="flex justify-between items-center border-b border-zinc-900 pb-4">
+                    <div>
+                        <h2 class="text-2xl font-extrabold tracking-tight text-white font-sans">Painel Consolidado</h2>
+                        <p class="text-zinc-500 text-xs mt-1 font-mono">Resumo executivo de faturamento e posições de pipeline</p>
+                    </div>
+                    <div class="font-mono text-[10px] text-zinc-500 bg-zinc-900/50 border border-zinc-800 px-3 py-1 rounded">
+                        COMPETÊNCIA: 2026-06 (Corrente)
+                    </div>
+                </div>
+
+                <!-- Metrics Widgets -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div class="glass-card p-6 flex flex-col justify-between min-h-[120px]">
+                        <span class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider block" id="dash-main-title">Faturamento Total</span>
+                        <div class="text-xl font-bold tracking-tight text-white mt-3" id="dash-main-value">R$ 0,00</div>
+                    </div>
+                    <div class="glass-card p-6 flex flex-col justify-between min-h-[120px]">
+                        <span class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider block" id="dash-sec-title">Comissões Distribuídas</span>
+                        <div class="text-xl font-bold tracking-tight text-white mt-3" id="dash-sec-value">R$ 0,00</div>
+                    </div>
+                    <div class="glass-card p-6 flex flex-col justify-between min-h-[120px]">
+                        <span class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider block">Pipeline Ativo CRM</span>
+                        <div class="text-xl font-bold tracking-tight text-white mt-3" id="dash-pipeline-value">R$ 0,00</div>
+                    </div>
+                    <div class="glass-card p-6 flex flex-col justify-between min-h-[120px]">
+                        <span class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider block">Clientes Sob Custódia</span>
+                        <div class="text-xl font-bold tracking-tight text-white mt-3" id="dash-clients-count">0</div>
+                    </div>
+                </div>
+
+                <!-- Charts & Details Row -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+                    <!-- Chart widget -->
+                    <div class="glass-card p-6 lg:col-span-7 space-y-4 flex flex-col justify-between">
+                        <div class="flex justify-between items-center">
+                            <span class="font-mono text-[9px] text-zinc-400 uppercase tracking-wider">[ EVOLUÇÃO MENSAL DAS RECEITAS ]</span>
+                            <span class="text-zinc-500 text-[10px] font-mono">Últimos 5 meses</span>
+                        </div>
+                        <div id="analytics-chart-container" class="h-[150px] w-full pt-4">
+                            <!-- SVG Chart drawn dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Payout logs widget -->
+                    <div class="glass-card p-6 lg:col-span-5 flex flex-col justify-between">
+                        <div class="space-y-4">
+                            <span class="font-mono text-[9px] text-zinc-400 uppercase tracking-wider block">[ ÚLTIMOS LANÇAMENTOS DO PERÍODO ]</span>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left border-collapse strivo-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="py-2 px-4">Data</th>
+                                            <th class="py-2 px-4">Descrição</th>
+                                            <th class="py-2 px-4">Assessor</th>
+                                            <th class="py-2 px-4">Tipo</th>
+                                            <th class="py-2 px-4 text-right">Repasse</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="dash-transactions-body">
+                                        <!-- Rendered dynamically -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pipeline by Advisor Row -->
+                <div class="grid grid-cols-1 gap-6">
+                    <div class="glass-card p-6 space-y-4">
+                        <div class="flex justify-between items-center">
+                            <span class="font-mono text-[9px] text-zinc-400 uppercase tracking-wider">[ PIPELINE ATIVO POR ASSESSOR COMERCIAL ]</span>
+                            <span class="text-zinc-500 text-[10px] font-mono">Consolidado das Etapas de Vendas</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse strivo-table">
+                                <thead>
+                                    <tr>
+                                        <th class="py-2.5 px-4">Assessor</th>
+                                        <th class="py-2.5 px-4 font-mono text-[10px]">Papel</th>
+                                        <th class="py-2.5 px-4 text-right">Leads Ativos</th>
+                                        <th class="py-2.5 px-4 text-right">Valor em Pipeline</th>
+                                        <th class="py-2.5 px-4 text-right">Distribuição %</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dash-pipeline-advisors-body">
+                                    <!-- Rendered dynamically -->
+                                </tbody>
+                                <tfoot>
+                                    <tr class="font-bold text-white border-t border-zinc-800 bg-slate-900/10">
+                                        <td class="py-3 px-4">TOTAL CONSOLIDADO</td>
+                                        <td class="py-3 px-4 font-mono text-[10px]">-</td>
+                                        <td class="py-3 px-4 text-right" id="dash-pipeline-advisors-total-count">0</td>
+                                        <td class="py-3 px-4 text-right text-emerald-400" id="dash-pipeline-advisors-total-value">R$ 0,00</td>
+                                        <td class="py-3 px-4 text-right">100.0%</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= view-crm ================= -->
+            <div id="view-crm" class="app-view hidden space-y-8">
+                <div class="flex flex-col sm:flex-row justify-between sm:items-center border-b border-zinc-900 pb-4 gap-4">
+                    <div>
+                        <h2 class="text-2xl font-extrabold tracking-tight text-white font-sans">CRM & Funil de Captação</h2>
+                        <p class="text-zinc-500 text-xs mt-1 font-mono">Organização de leads e controle de participações societárias</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="crm-view-toggle">
+                            <button id="toggle-view-kanban" onclick="setCRMView('kanban')" class="view-toggle-btn active">📋 Kanban</button>
+                            <button id="toggle-view-list" onclick="setCRMView('list')" class="view-toggle-btn">📝 Lista</button>
+                        </div>
+                        <button onclick="openLeadModal(null)" class="bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-2 rounded font-bold font-mono text-xs tracking-wider uppercase transition-colors shrink-0">
+                            + NOVO LEAD
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CRM Kanban view container -->
+                <div id="crm-kanban-view" class="space-y-4">
+                    <!-- Kanban Columns Grid -->
+                    <div id="crm-kanban-columns-grid" class="grid grid-cols-1 gap-4">
+                        <!-- Rendered dynamically -->
+                    </div>
+                </div>
+
+                <!-- CRM List view container (hidden by default) -->
+                <div id="crm-list-view" class="hidden glass-card p-6">
+                    <span class="font-mono text-[9px] text-zinc-400 uppercase tracking-wider block mb-4">[ LISTAGEM DE LEADS ]</span>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse strivo-table">
+                            <thead>
+                                <tr>
+                                    <th class="py-2.5 px-4">Nome</th>
+                                    <th class="py-2.5 px-4 font-mono text-[10px]">Telefone</th>
+                                    <th class="py-2.5 px-4 font-mono text-[10px]">E-mail</th>
+                                    <th class="py-2.5 px-4 font-mono text-[10px]">Etapa do Funil</th>
+                                    <th class="py-2.5 px-4 font-mono text-[10px]">Assessor Designado</th>
+                                    <th class="py-2.5 px-4 text-right">Valor Estimado</th>
+                                    <th class="py-2.5 px-4 text-right">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody id="crm-list-table-body">
+                                <!-- Rendered dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= view-financial ================= -->
+            <div id="view-financial" class="app-view hidden space-y-8">
+                <div class="flex justify-between items-center border-b border-zinc-900 pb-4">
+                    <div>
+                        <h2 class="text-2xl font-extrabold tracking-tight text-white font-sans">Motor de Comissões & Faturamento</h2>
+                        <p class="text-zinc-500 text-xs mt-1 font-mono">Upload de planilhas de taxas administrativas e cálculo automático de splits</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+                    
+                    <!-- Area de upload / processamento -->
+                    <div class="glass-card p-6 lg:col-span-5 space-y-6 flex flex-col justify-between">
+                        <div class="space-y-4">
+                            <span class="font-mono text-[9px] text-zinc-400 uppercase tracking-wider block">// ARQUIVO DE FATURAMENTO DA COMPETÊNCIA</span>
+                            
+                            <div class="border-2 border-dashed border-zinc-850 hover:border-cyan-500/30 rounded-xl p-8 text-center transition-all bg-slate-950/20">
+                                <span class="text-3xl block mb-3">📁</span>
+                                <h4 class="font-semibold text-sm text-zinc-300">Planilha de Receitas (.xlsx / .csv)</h4>
+                                <p class="text-zinc-500 text-[10px] font-mono mt-1">Carregue dados brutos de faturamento dos clientes</p>
+                                <div class="mt-6 flex justify-center gap-3">
+                                    <button onclick="simulateSpreadsheetUpload()" class="bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 font-mono text-xs px-4 py-2 rounded hover:bg-cyan-500 hover:text-black transition-all font-bold">
+                                        SIMULAR IMPORTAÇÃO
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Logs da simulação -->
+                        <div class="bg-slate-950 border border-zinc-900 p-4 rounded-lg min-h-[140px] max-h-[200px] overflow-y-auto" id="upload-processing-logs">
+                            <div class="text-zinc-600 font-mono text-[10px]">// AGUARDANDO IMPORTAÇÃO DE PLANILHA PARA PROCESSAMENTO...</div>
+                        </div>
+                    </div>
+
+                    <!-- Tabela de faturamentos processados -->
+                    <div class="glass-card p-6 lg:col-span-7 space-y-4">
+                        <span class="font-mono text-[9px] text-zinc-400 uppercase tracking-wider block">[ EXTRATO DE COMPETÊNCIA ]</span>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse strivo-table">
+                                <thead>
+                                    <tr>
+                                        <th class="py-2.5 px-4">Período</th>
+                                        <th class="py-2.5 px-4">Cod. Cliente</th>
+                                        <th class="py-2.5 px-4">Nome Cliente</th>
+                                        <th class="py-2.5 px-4">Produto</th>
+                                        <th class="py-2.5 px-4 text-right">Faturamento</th>
+                                        <th class="py-2.5 px-4 text-right">Repasse Split</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="fin-statements-body">
+                                    <!-- Rendered dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= view-approvals ================= -->
+            <div id="view-approvals" class="app-view hidden space-y-8">
+                <div class="flex justify-between items-center border-b border-zinc-900 pb-4">
+                    <div>
+                        <h2 class="text-2xl font-extrabold tracking-tight text-white font-sans">Central de Aprovações de Aportes</h2>
+                        <p class="text-zinc-500 text-xs mt-1 font-mono">Liberação e validação de taxas de captação pontuais (fees únicos)</p>
+                    </div>
+                    <button onclick="openAporteModal()" class="bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-2 rounded font-bold font-mono text-xs tracking-wider uppercase transition-colors">
+                        + REGISTRAR APORTE
+                    </button>
+                </div>
+
+                <!-- Approvals Queue -->
+                <div class="glass-card p-6">
+                    <span class="font-mono text-[9px] text-zinc-400 uppercase tracking-wider block mb-4">[ SOLICITAÇÕES DE DISTRIBUIÇÃO PENDENTES ]</span>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse strivo-table">
+                            <thead>
+                                <tr>
+                                    <th class="py-2.5 px-4">Data Aporte</th>
+                                    <th class="py-2.5 px-4">Cliente / Investidor</th>
+                                    <th class="py-2.5 px-4">Fundo / Produto</th>
+                                    <th class="py-2.5 px-4">Assessor Origem</th>
+                                    <th class="py-2.5 px-4 text-right">Valor Aportado</th>
+                                    <th class="py-2.5 px-4 text-right">Fee Captação Total</th>
+                                    <th class="py-2.5 px-4">Status Governança</th>
+                                    <th class="py-2.5 px-4 text-right">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody id="approvals-table-body">
+                                <!-- Rendered dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= view-partnerships ================= -->
+            <div id="view-partnerships" class="app-view hidden space-y-8">
+                
+                <!-- Users Header -->
+                <div class="flex justify-between items-center border-b border-zinc-900 pb-4">
+                    <div>
+                        <h2 class="text-2xl font-extrabold tracking-tight text-white font-sans">Gestão de Parcerias e Regras</h2>
+                        <p class="text-zinc-500 text-xs mt-1 font-mono">Parametrização da rede de assessores e regras de splits de produtos</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+                    <!-- Users List -->
+                    <div class="glass-card p-6 lg:col-span-7 space-y-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="font-mono text-[9px] text-zinc-400 uppercase tracking-wider block">[ CADASTRO DA REDE COMERCIAL ]</span>
+                            <button onclick="openUserModal()" class="text-cyan-400 hover:text-cyan-300 font-mono text-[10px] uppercase font-bold">+ ADICIONAR PARCEIRO</button>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse strivo-table">
+                                <thead>
+                                    <tr>
+                                        <th class="py-2 px-4">ID</th>
+                                        <th class="py-2 px-4">Nome</th>
+                                        <th class="py-2 px-4">E-mail</th>
+                                        <th class="py-2 px-4">Cargo / Função</th>
+                                        <th class="py-2 px-4">Líder Associado</th>
+                                        <th class="py-2 px-4 text-right">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-table-body">
+                                    <!-- Rendered dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Products List -->
+                    <div class="glass-card p-6 lg:col-span-5 space-y-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="font-mono text-[9px] text-zinc-400 uppercase tracking-wider block">[ PRODUTOS & REPASSES PADRÃO ]</span>
+                            <button onclick="openProductModal()" class="text-cyan-400 hover:text-cyan-300 font-mono text-[10px] uppercase font-bold">+ NOVO PRODUTO</button>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse strivo-table">
+                                <thead>
+                                    <tr>
+                                        <th class="py-2 px-4">ID</th>
+                                        <th class="py-2 px-4">Nome</th>
+                                        <th class="py-2 px-4 text-right">Tx Adm</th>
+                                        <th class="py-2 px-4 text-right">Tx Cap</th>
+                                        <th class="py-2 px-4 text-right">Split Padrão</th>
+                                        <th class="py-2 px-4 text-right">Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="products-table-body">
+                                    <!-- Rendered dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Audit Logs widget -->
+                <div class="glass-card p-6">
+                    <span class="font-mono text-[9px] text-zinc-400 uppercase tracking-wider block mb-4">// REGISTRO DE AUDITORIA DO SISTEMA</span>
+                    <div class="bg-slate-950/80 border border-zinc-900 rounded p-4 h-[180px] overflow-y-auto" id="sys-logs-content">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= view-pipeline ================= -->
+            <div id="view-pipeline" class="app-view hidden space-y-8">
+                <div class="flex justify-between items-center border-b border-zinc-900 pb-4">
+                    <div>
+                        <h2 class="text-2xl font-extrabold tracking-tight text-white font-sans">Pipeline de Captação</h2>
+                        <p class="text-zinc-500 text-xs mt-1 font-mono">Visão consolidada do potencial de captação por etapa do funil</p>
+                    </div>
+                    <div class="font-mono text-[10px] text-zinc-500 bg-zinc-900/50 border border-zinc-800 px-3 py-1 rounded" id="pipeline-date-label">
+                        ATUALIZADO EM TEMPO REAL
+                    </div>
+                </div>
+
+                <!-- Pipeline Summary Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="glass-card p-6 flex flex-col justify-between min-h-[100px]">
+                        <span class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider block">Total Pipeline Ativo</span>
+                        <div class="text-xl font-bold tracking-tight text-white mt-3" id="pipeline-total-value">R$ 0,00</div>
+                    </div>
+                    <div class="glass-card p-6 flex flex-col justify-between min-h-[100px]">
+                        <span class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider block">Leads no Pipeline</span>
+                        <div class="text-xl font-bold tracking-tight text-white mt-3" id="pipeline-total-leads">0</div>
+                    </div>
+                    <div class="glass-card p-6 flex flex-col justify-between min-h-[100px]">
+                        <span class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider block">Ticket Médio</span>
+                        <div class="text-xl font-bold tracking-tight text-white mt-3" id="pipeline-avg-ticket">R$ 0,00</div>
+                    </div>
+                </div>
+
+                <!-- Pyramid Funnel Chart -->
+                <div class="glass-card p-8 space-y-6">
+                    <div class="flex justify-between items-center">
+                        <span class="font-mono text-[9px] text-zinc-400 uppercase tracking-wider">[ PIRÂMIDE DE CAPTAÇÃO — EMPILHADA POR ETAPA ]</span>
+                        <span class="text-zinc-500 text-[10px] font-mono" id="pipeline-stages-count">0 etapas ativas</span>
+                    </div>
+                    <div id="pipeline-pyramid-container" class="w-full flex flex-col items-center py-6">
+                        <!-- Rendered dynamically by JS -->
+                    </div>
+                </div>
+
+                <!-- Pipeline Detail Table -->
+                <div class="glass-card p-6 space-y-4">
+                    <span class="font-mono text-[9px] text-zinc-400 uppercase tracking-wider block">[ DETALHAMENTO POR ETAPA ]</span>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse strivo-table">
+                            <thead>
+                                <tr>
+                                    <th class="py-2.5 px-4">Etapa</th>
+                                    <th class="py-2.5 px-4 text-right">Leads</th>
+                                    <th class="py-2.5 px-4 text-right">Valor Captação</th>
+                                    <th class="py-2.5 px-4 text-right">% do Total</th>
+                                    <th class="py-2.5 px-4">Barra de Progresso</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pipeline-detail-body">
+                                <!-- Rendered dynamically -->
+                            </tbody>
+                            <tfoot>
+                                <tr class="font-bold text-white border-t border-zinc-800 bg-slate-900/10">
+                                    <td class="py-3 px-4">TOTAL</td>
+                                    <td class="py-3 px-4 text-right" id="pipeline-table-total-leads">0</td>
+                                    <td class="py-3 px-4 text-right text-emerald-400" id="pipeline-table-total-value">R$ 0,00</td>
+                                    <td class="py-3 px-4 text-right">100.0%</td>
+                                    <td class="py-3 px-4"></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= view-settings ================= -->
+            <div id="view-settings" class="app-view hidden space-y-8">
+                <div class="flex justify-between items-center border-b border-zinc-900 pb-4">
+                    <div>
+                        <h2 class="text-2xl font-extrabold tracking-tight text-white font-sans">Configurações de Funil</h2>
+                        <p class="text-zinc-500 text-xs mt-1 font-mono">Personalize as etapas do pipeline de captação</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+                    <!-- Coluna 1: Lista e reordenação de etapas -->
+                    <div class="glass-card p-6 lg:col-span-7 space-y-6">
+                        <span class="font-mono text-[9px] text-zinc-400 uppercase tracking-wider block">[ ETAPAS DO FUNIL ATIVAS ]</span>
+                        
+                        <div id="funnel-stages-list" class="space-y-3">
+                            <!-- Rendered dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Coluna 2: Formulário para criar novas etapas -->
+                    <div class="glass-card p-6 lg:col-span-5 space-y-6">
+                        <span class="font-mono text-[9px] text-zinc-400 uppercase tracking-wider block">// ADICIONAR NOVA ETAPA</span>
+                        
+                        <form id="create-stage-form" onsubmit="createNewStage(event)" class="space-y-4 text-xs">
+                            <div class="space-y-1">
+                                <label for="new-stage-label" class="text-zinc-400 font-semibold">Nome da Etapa:</label>
+                                <input type="text" id="new-stage-label" required placeholder="Ex: Negociação Final" class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 font-sans focus:outline-none focus:border-cyan-500">
+                            </div>
+                            <div class="space-y-1">
+                                <label for="new-stage-color" class="text-zinc-400 font-semibold">Cor da Etapa:</label>
+                                <select id="new-stage-color" class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 focus:outline-none focus:border-cyan-500">
+                                    <option value="badge-blue">Azul (Prospect)</option>
+                                    <option value="badge-purple">Roxo (Contato)</option>
+                                    <option value="badge-amber">Laranja (Proposta)</option>
+                                    <option value="badge-emerald">Verde (Fechado)</option>
+                                    <option value="badge-cyan">Ciano</option>
+                                    <option value="badge-zinc">Cinza</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="w-full bg-cyan-500 hover:bg-cyan-400 text-black font-bold py-2.5 rounded font-mono text-xs tracking-wider uppercase transition-colors">
+                                Adicionar Etapa
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- ================= MODAIS OVERLAYS ================= -->
+    
+    <!-- Modal Lead -->
+    <div id="lead-modal" class="modal-overlay fixed inset-0 flex items-center justify-center z-50 hidden">
+        <div class="bg-[#0b1022] border border-zinc-800 p-6 rounded-xl w-[95%] max-w-4xl max-h-[90vh] overflow-y-auto space-y-6">
+            <div class="flex justify-between items-center border-b border-zinc-800 pb-3">
+                <h3 id="lead-modal-title" class="font-bold text-white text-base">Novo Lead</h3>
+                <button onclick="closeLeadModal()" class="text-zinc-500 hover:text-white font-mono text-sm">[ Fechar ]</button>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <!-- COLUNA DA ESQUERDA: Form de Informações Básicas (7 cols) -->
+                <form onsubmit="saveLead(event)" id="lead-modal-form" class="lg:col-span-7 space-y-4 text-xs">
+                    <input type="hidden" id="lead-modal-id">
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <label for="lead-modal-name" class="text-zinc-400 font-semibold">Nome do Investidor:</label>
+                            <input type="text" id="lead-modal-name" required class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 font-sans focus:outline-none focus:border-cyan-500">
+                        </div>
+                        <div class="space-y-1">
+                            <label for="lead-modal-value" class="text-zinc-400 font-semibold">Valor Estimado (R$):</label>
+                            <input type="number" id="lead-modal-value" required class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <label for="lead-modal-phone" class="text-zinc-400 font-semibold">Telefone:</label>
+                            <input type="text" id="lead-modal-phone" placeholder="(00) 00000-0000" class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500">
+                        </div>
+                        <div class="space-y-1">
+                            <label for="lead-modal-email" class="text-zinc-400 font-semibold">E-mail:</label>
+                            <input type="email" id="lead-modal-email" placeholder="exemplo@strivo.com" class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 font-sans focus:outline-none focus:border-cyan-500">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <label for="lead-modal-source" class="text-zinc-400 font-semibold">Origem (campo texto curto):</label>
+                            <input type="text" id="lead-modal-source" placeholder="LinkedIn, Indicação, etc." class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 font-sans focus:outline-none focus:border-cyan-500">
+                        </div>
+                        <div class="space-y-1">
+                            <label for="lead-modal-product" class="text-zinc-400 font-semibold">Produto de Interesse:</label>
+                            <select id="lead-modal-product" class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 focus:outline-none focus:border-cyan-500">
+                                <!-- Options filled by JS -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <label for="lead-modal-agent" class="text-zinc-400 font-semibold">Assessor Designado:</label>
+                            <select id="lead-modal-agent" class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 focus:outline-none focus:border-cyan-500">
+                                <!-- Options filled by JS -->
+                            </select>
+                        </div>
+                        <div class="space-y-1">
+                            <label for="lead-modal-stage" class="text-zinc-400 font-semibold">Etapa do Funil:</label>
+                            <select id="lead-modal-stage" class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 focus:outline-none focus:border-cyan-500">
+                                <!-- Options filled by JS -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1">
+                        <label for="lead-modal-extrainfo" class="text-zinc-400 font-semibold">Informações Extras:</label>
+                        <textarea id="lead-modal-extrainfo" rows="3" placeholder="Informações relevantes sobre a negociação..." class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 font-sans focus:outline-none focus:border-cyan-500"></textarea>
+                    </div>
+
+                    <div class="pt-4 flex justify-end gap-3 font-mono text-xs">
+                        <button type="button" onclick="closeLeadModal()" class="text-zinc-500 hover:text-zinc-400 py-2 px-4 uppercase">[ Cancelar ]</button>
+                        <button type="submit" class="bg-cyan-500 hover:bg-cyan-400 text-black font-bold px-5 py-2.5 rounded transition-all uppercase">Salvar Dados</button>
+                    </div>
+                </form>
+
+                <!-- COLUNA DA DIREITA: Próximos Passos (Tarefas) & Anexos (5 cols) -->
+                <div class="lg:col-span-5 space-y-6 border-t lg:border-t-0 lg:border-l border-zinc-900 lg:pl-6 pt-6 lg:pt-0 text-xs">
+                    <!-- SEÇÃO DE TAREFAS -->
+                    <div class="space-y-3" id="lead-modal-tasks-section">
+                        <h4 class="font-mono text-[10px] text-zinc-400 uppercase tracking-wider block font-bold">// 📅 Próximos Passos / Tarefas</h4>
+                        
+                        <!-- Lista de Tarefas -->
+                        <div id="lead-tasks-list" class="max-h-[160px] overflow-y-auto pr-1">
+                            <!-- Rendered dynamically -->
+                        </div>
+                        
+                        <!-- Form de adicionar tarefa -->
+                        <div id="add-task-form-container" class="bg-slate-950/40 border border-zinc-900 p-3 rounded-lg space-y-2 mt-2">
+                            <div class="text-[9px] font-mono text-zinc-500 uppercase">Agendar Nova Tarefa</div>
+                            <input type="text" id="new-task-text" placeholder="O que precisa ser feito?" class="w-full bg-slate-900 border border-zinc-800 rounded p-1.5 text-zinc-200 text-xs focus:outline-none focus:border-cyan-500">
+                            <div class="flex gap-2">
+                                <input type="date" id="new-task-date" class="bg-slate-900 border border-zinc-800 rounded p-1 text-zinc-300 text-xs font-mono focus:outline-none focus:border-cyan-500 flex-1">
+                                <button type="button" onclick="addCurrentLeadTask()" class="bg-zinc-850 hover:bg-zinc-800 border border-zinc-850 text-zinc-300 font-mono text-[10px] px-3 py-1 rounded transition-colors uppercase font-bold">
+                                    Agendar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SEÇÃO DE ANEXOS -->
+                    <div class="space-y-3">
+                        <h4 class="font-mono text-[10px] text-zinc-400 uppercase tracking-wider block font-bold">// 📁 Anexos / Documentos</h4>
+                        
+                        <!-- Lista de Anexos -->
+                        <div id="lead-attachments-list" class="max-h-[140px] overflow-y-auto pr-1">
+                            <!-- Rendered dynamically -->
+                        </div>
+
+                        <!-- Upload de anexos (simulado) -->
+                        <div id="add-attachment-container" class="bg-slate-950/40 border border-zinc-900 p-3 rounded-lg space-y-2">
+                            <div class="text-[9px] font-mono text-zinc-500 uppercase">Anexar Novo Arquivo</div>
+                            <div class="flex items-center gap-2">
+                                <input type="file" id="new-attachment-file" onchange="uploadCurrentLeadFile(this)" class="hidden">
+                                <label for="new-attachment-file" class="w-full bg-zinc-900 border border-dashed border-zinc-800 hover:border-cyan-500/30 rounded p-2 text-center text-zinc-400 hover:text-cyan-400 font-mono text-[10px] cursor-pointer transition-colors block uppercase">
+                                    Escolher Arquivo...
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Aporte -->
+    <div id="aporte-modal" class="modal-overlay fixed inset-0 flex items-center justify-center z-50 hidden">
+        <div class="bg-[#0b1022] border border-zinc-800 p-6 rounded-xl w-[90%] max-w-md space-y-6">
+            <div class="flex justify-between items-center border-b border-zinc-800 pb-3">
+                <h3 class="font-bold text-white text-base">Registrar Novo Aporte</h3>
+                <button onclick="closeAporteModal()" class="text-zinc-500 hover:text-white font-mono text-sm">[ Fechar ]</button>
+            </div>
+            <form onsubmit="saveAporte(event)" class="space-y-4 text-xs">
+                <div class="space-y-1">
+                    <label for="aporte-modal-client" class="text-zinc-400 font-semibold">Nome do Investidor / Empresa:</label>
+                    <input type="text" id="aporte-modal-client" required class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 font-sans focus:outline-none focus:border-cyan-500">
+                </div>
+                <div class="space-y-1">
+                    <label for="aporte-modal-value" class="text-zinc-400 font-semibold">Valor do Aporte (R$):</label>
+                    <input type="number" id="aporte-modal-value" required class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500">
+                </div>
+                <div class="space-y-1">
+                    <label for="aporte-modal-product" class="text-zinc-400 font-semibold">Fundo / Produto Investido:</label>
+                    <select id="aporte-modal-product" class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 focus:outline-none focus:border-cyan-500">
+                        <!-- Options filled by JS -->
+                    </select>
+                </div>
+                <div class="space-y-1" id="aporte-modal-agent-wrapper">
+                    <label for="aporte-modal-agent" class="text-zinc-400 font-semibold">Assessor da Operação:</label>
+                    <select id="aporte-modal-agent" class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 focus:outline-none focus:border-cyan-500">
+                        <!-- Options filled by JS -->
+                    </select>
+                </div>
+                <div class="pt-4 flex justify-end gap-3 font-mono text-xs">
+                    <button type="button" onclick="closeAporteModal()" class="text-zinc-500 hover:text-zinc-400 py-2 px-4 uppercase">[ Cancelar ]</button>
+                    <button type="submit" class="bg-cyan-500 hover:bg-cyan-400 text-black font-bold px-5 py-2.5 rounded transition-all uppercase">Registrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal User CRUD -->
+    <div id="user-modal" class="modal-overlay fixed inset-0 flex items-center justify-center z-50 hidden">
+        <div class="bg-[#0b1022] border border-zinc-800 p-6 rounded-xl w-[90%] max-w-md space-y-6">
+            <div class="flex justify-between items-center border-b border-zinc-800 pb-3">
+                <h3 id="user-modal-title" class="font-bold text-white text-base">Novo Usuário</h3>
+                <button onclick="closeUserModal()" class="text-zinc-500 hover:text-white font-mono text-sm">[ Fechar ]</button>
+            </div>
+            <form onsubmit="saveUser(event)" class="space-y-4 text-xs">
+                <input type="hidden" id="user-modal-id">
+                <div class="space-y-1">
+                    <label for="user-modal-name" class="text-zinc-400 font-semibold">Nome Completo:</label>
+                    <input type="text" id="user-modal-name" required class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 font-sans focus:outline-none focus:border-cyan-500">
+                </div>
+                <div class="space-y-1">
+                    <label for="user-modal-email" class="text-zinc-400 font-semibold">E-mail Corporativo:</label>
+                    <input type="email" id="user-modal-email" required class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 font-sans focus:outline-none focus:border-cyan-500">
+                </div>
+                <div class="space-y-1">
+                    <label for="user-modal-role" class="text-zinc-400 font-semibold">Nível / Cargo Comercial:</label>
+                    <select id="user-modal-role" class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 focus:outline-none focus:border-cyan-500">
+                        <option value="diretoria">Diretoria</option>
+                        <option value="lideranca">Liderança Comercial (Nível 2)</option>
+                        <option value="agente">Agente Comercial (Nível 3)</option>
+                    </select>
+                </div>
+                <div class="space-y-1">
+                    <label for="user-modal-parent" class="text-zinc-400 font-semibold">Líder Comercial Responsável:</label>
+                    <select id="user-modal-parent" class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 focus:outline-none focus:border-cyan-500">
+                        <!-- Options filled by JS -->
+                    </select>
+                </div>
+                <div class="pt-4 flex justify-end gap-3 font-mono text-xs">
+                    <button type="button" onclick="closeUserModal()" class="text-zinc-500 hover:text-zinc-400 py-2 px-4 uppercase">[ Cancelar ]</button>
+                    <button type="submit" class="bg-cyan-500 hover:bg-cyan-400 text-black font-bold px-5 py-2.5 rounded transition-all uppercase">Salvar Parceiro</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Product CRUD -->
+    <div id="product-modal" class="modal-overlay fixed inset-0 flex items-center justify-center z-50 hidden">
+        <div class="bg-[#0b1022] border border-zinc-800 p-6 rounded-xl w-[90%] max-w-md space-y-6">
+            <div class="flex justify-between items-center border-b border-zinc-800 pb-3">
+                <h3 id="product-modal-title" class="font-bold text-white text-base">Novo Produto / Fundo</h3>
+                <button onclick="closeProductModal()" class="text-zinc-500 hover:text-white font-mono text-sm">[ Fechar ]</button>
+            </div>
+            <form onsubmit="saveProduct(event)" class="space-y-4 text-xs font-mono">
+                <input type="hidden" id="product-modal-id">
+                <div class="space-y-1">
+                    <label for="product-modal-name" class="text-zinc-400 font-sans font-semibold">Nome do Fundo:</label>
+                    <input type="text" id="product-modal-name" required class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 font-sans focus:outline-none focus:border-cyan-500">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                        <label for="product-modal-taxadm" class="text-zinc-400 font-sans font-semibold">Taxa Adm (% a.a.):</label>
+                        <input type="number" step="0.1" id="product-modal-taxadm" required class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 focus:outline-none focus:border-cyan-500">
+                    </div>
+                    <div class="space-y-1">
+                        <label for="product-modal-feecap" class="text-zinc-400 font-sans font-semibold">Fee Captação (%):</label>
+                        <input type="number" step="0.1" id="product-modal-feecap" required class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 focus:outline-none focus:border-cyan-500">
+                    </div>
+                </div>
+                
+                <div class="border-t border-zinc-800 pt-4 space-y-3">
+                    <span class="text-zinc-400 font-sans font-bold block mb-1">Divisão de Splits (Soma = 100%)</span>
+                    
+                    <div class="grid grid-cols-3 gap-2">
+                        <div class="space-y-1">
+                            <label for="product-modal-splitstrivo" class="text-zinc-500 text-[10px]">Strivo (Casa)</label>
+                            <input type="number" id="product-modal-splitstrivo" required class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 focus:outline-none focus:border-cyan-500">
+                        </div>
+                        <div class="space-y-1">
+                            <label for="product-modal-splitlider" class="text-zinc-500 text-[10px]">Liderança</label>
+                            <input type="number" id="product-modal-splitlider" required class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 focus:outline-none focus:border-cyan-500">
+                        </div>
+                        <div class="space-y-1">
+                            <label for="product-modal-splitagente" class="text-zinc-500 text-[10px]">Agente</label>
+                            <input type="number" id="product-modal-splitagente" required class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 focus:outline-none focus:border-cyan-500">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-4 flex justify-end gap-3 font-mono text-xs">
+                    <button type="button" onclick="closeProductModal()" class="text-zinc-500 hover:text-zinc-400 py-2 px-4 uppercase font-sans">[ Cancelar ]</button>
+                    <button type="submit" class="bg-cyan-500 hover:bg-cyan-400 text-black font-bold px-5 py-2.5 rounded transition-all uppercase font-sans">Salvar Fundo</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Data Store JS Library -->
+    <script src="mock-data.js"></script>
+    <!-- App Logic Controller -->
+    <script src="app.js"></script>
+</body>
+</html>
