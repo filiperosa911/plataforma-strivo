@@ -443,14 +443,48 @@
                     </div>
                 </div>
 
-                <!-- Pyramid Funnel Chart -->
-                <div class="glass-card p-8 space-y-6">
-                    <div class="flex justify-between items-center">
-                        <span class="font-mono text-[9px] text-zinc-400 uppercase tracking-wider">[ PIRÂMIDE DE CAPTAÇÃO — EMPILHADA POR ETAPA ]</span>
-                        <span class="text-zinc-500 text-[10px] font-mono" id="pipeline-stages-count">0 etapas ativas</span>
+                <!-- Pyramid + Pipeline by User (2 columns) -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+                    <!-- LEFT: Pyramid Funnel Chart -->
+                    <div class="glass-card p-6 space-y-4 flex flex-col">
+                        <div class="flex justify-between items-center">
+                            <span class="font-mono text-[9px] text-zinc-400 uppercase tracking-wider">[ PIRÂMIDE DE CAPTAÇÃO ]</span>
+                            <span class="text-zinc-500 text-[10px] font-mono" id="pipeline-stages-count">0 etapas ativas</span>
+                        </div>
+                        <div id="pipeline-pyramid-container" class="w-full flex flex-col items-center py-4 flex-1 justify-center">
+                            <!-- Rendered dynamically by JS -->
+                        </div>
                     </div>
-                    <div id="pipeline-pyramid-container" class="w-full flex flex-col items-center py-6">
-                        <!-- Rendered dynamically by JS -->
+
+                    <!-- RIGHT: Pipeline by User -->
+                    <div class="glass-card p-6 space-y-4 flex flex-col">
+                        <div class="flex justify-between items-center">
+                            <span class="font-mono text-[9px] text-zinc-400 uppercase tracking-wider">[ PIPELINE POR ASSESSOR ]</span>
+                            <span class="text-zinc-500 text-[10px] font-mono" id="pipeline-users-count">0 assessores</span>
+                        </div>
+                        <div class="overflow-x-auto flex-1">
+                            <table class="w-full text-left border-collapse strivo-table">
+                                <thead>
+                                    <tr>
+                                        <th class="py-2 px-3 text-[10px]">Assessor</th>
+                                        <th class="py-2 px-3 text-right text-[10px]">Leads</th>
+                                        <th class="py-2 px-3 text-right text-[10px]">Pipeline</th>
+                                        <th class="py-2 px-3 text-right text-[10px]">%</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pipeline-users-body">
+                                    <!-- Rendered dynamically -->
+                                </tbody>
+                                <tfoot>
+                                    <tr class="font-bold text-white border-t border-zinc-800 bg-slate-900/10">
+                                        <td class="py-2.5 px-3 text-xs">TOTAL</td>
+                                        <td class="py-2.5 px-3 text-right text-xs" id="pipeline-users-total-leads">0</td>
+                                        <td class="py-2.5 px-3 text-right text-xs text-emerald-400" id="pipeline-users-total-value">R$ 0,00</td>
+                                        <td class="py-2.5 px-3 text-right text-xs">100%</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
                     </div>
                 </div>
 

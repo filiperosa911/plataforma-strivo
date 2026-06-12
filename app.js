@@ -1942,6 +1942,73 @@ function renderPipeline() {
     pyramidHTML += '</div>';
     pyramidContainer.innerHTML = pyramidHTML;
 
+    // ---- RENDER PIPELINE BY USER ----
+    const usersBody = document.getElementById('pipeline-users-body');
+    const usersCountEl = document.getElementById('pipeline-users-count');
+    const usersTotalLeadsEl = document.getElementById('pipeline-users-total-leads');
+    const usersTotalValueEl = document.getElementById('pipeline-users-total-value');
+
+    if (usersBody) {
+        usersBody.innerHTML = '';
+        
+        // Filter users based on visible user IDs
+        const visibleUsers = db.users.filter(u => visibleUserIds.includes(u.id) && (u.role === 'agente' || u.role === 'lideranca' || u.role === 'diretoria'));
+        
+        // Active stage keys
+        const activeStageKeys = stages.map(s => s.key);
+        // Leads in active stages
+        const activeLeads = visibleLeads.filter(l => activeStageKeys.includes(l.status));
+        
+        const userPipelineData = visibleUsers.map(user => {
+            const userLeads = activeLeads.filter(l => l.agentId === user.id);
+            const userPipelineValue = userLeads.reduce((acc, curr) => acc + curr.value, 0);
+            return {
+                id: user.id,
+                name: user.name,
+                role: user.role,
+                leadsCount: userLeads.length,
+                pipelineValue: userPipelineValue
+            };
+        });
+
+        // Sort descending by value
+        userPipelineData.sort((a, b) => b.pipelineValue - a.pipelineValue);
+
+        const totalActiveLeadsCount = userPipelineData.reduce((acc, curr) => acc + curr.leadsCount, 0);
+        const totalActivePipelineValue = userPipelineData.reduce((acc, curr) => acc + curr.pipelineValue, 0);
+
+        if (usersCountEl) usersCountEl.innerText = `${visibleUsers.length} assessores`;
+        if (usersTotalLeadsEl) usersTotalLeadsEl.innerText = totalActiveLeadsCount;
+        if (usersTotalValueEl) usersTotalValueEl.innerText = formatCurrency(totalActivePipelineValue);
+
+        if (userPipelineData.length === 0) {
+            usersBody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-zinc-500 font-mono text-xs">Nenhum assessor com dados.</td></tr>`;
+        } else {
+            usersBody.innerHTML = userPipelineData.map(data => {
+                const percentage = totalActivePipelineValue > 0 ? (data.pipelineValue / totalActivePipelineValue * 100).toFixed(1) : '0.0';
+                
+                let roleBadge = '';
+                if (data.role === 'diretoria') roleBadge = '<span class="text-[8px] px-1 py-0.2 bg-red-950/40 text-red-400 border border-red-900/40 rounded ml-1 font-mono uppercase">Dir</span>';
+                else if (data.role === 'lideranca') roleBadge = '<span class="text-[8px] px-1 py-0.2 bg-purple-950/40 text-purple-400 border border-purple-900/40 rounded ml-1 font-mono uppercase">Líd</span>';
+                else roleBadge = '<span class="text-[8px] px-1 py-0.2 bg-blue-950/40 text-blue-400 border border-blue-900/40 rounded ml-1 font-mono uppercase">Com</span>';
+
+                return `
+                    <tr class="hover:bg-slate-900/30 transition-colors">
+                        <td class="py-2.5 px-3">
+                            <div class="flex items-center gap-1.5">
+                                <span class="font-semibold text-white text-xs">${data.name}</span>
+                                ${roleBadge}
+                            </div>
+                        </td>
+                        <td class="py-2.5 px-3 text-right font-mono text-xs text-zinc-300">${data.leadsCount}</td>
+                        <td class="py-2.5 px-3 text-right font-mono text-xs text-emerald-400 font-bold">${formatCurrency(data.pipelineValue)}</td>
+                        <td class="py-2.5 px-3 text-right font-mono text-xs text-zinc-400">${percentage}%</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+    }
+
     // ---- RENDER DETAIL TABLE ----
     const tableBody = document.getElementById('pipeline-detail-body');
     if (tableBody) {
