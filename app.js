@@ -48,7 +48,7 @@ async function initApp() {
             if (loggedUserId) {
                 options.global = {
                     headers: {
-                        'x-logged-user-id': loggedUserId.toString()
+                        'Accept-Language': loggedUserId.toString()
                     }
                 };
             }

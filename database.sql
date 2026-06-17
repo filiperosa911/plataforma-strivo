@@ -122,11 +122,11 @@ ALTER TABLE "faturamentoHistorico" ENABLE ROW LEVEL SECURITY;
 
 -- ==================== FUNÇÕES AUXILIARES DE SESSÃO (BULA RLS E RECURSÃO) ====================
 
--- Função para obter o ID do usuário logado enviado via header x-logged-user-id
+-- Função para obter o ID do usuário logado enviado via header Accept-Language
 CREATE OR REPLACE FUNCTION get_logged_user_id()
 RETURNS BIGINT AS $$
 BEGIN
-    RETURN NULLIF(current_setting('request.headers', true)::json->>'x-logged-user-id', '')::bigint;
+    RETURN NULLIF(current_setting('request.headers', true)::json->>'accept-language', '')::bigint;
 EXCEPTION
     WHEN OTHERS THEN
         RETURN NULL;
