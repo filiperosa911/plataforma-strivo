@@ -1,14 +1,14 @@
 // STRIVO PLATFORM // INITIAL MOCK DATA DEFINITIONS
 const INITIAL_MOCK_DATA = {
     users: [
-        { id: 1, name: "Filipe Rosa", role: "diretoria", email: "filipe@vertic.com", parentId: null, status: "active" },
-        { id: 2, name: "Diogo Wunsch", role: "diretoria", email: "diogo@strivo.com", parentId: null, status: "active" },
-        { id: 3, name: "Gustav Gorski", role: "diretoria", email: "gustav@strivo.com", parentId: null, status: "active" },
-        { id: 4, name: "Thiago Vicente", role: "diretoria", email: "thiago@strivo.com", parentId: null, status: "active" },
-        { id: 5, name: "Celso Pimenta", role: "lideranca", email: "celso@strivo.com", parentId: 2, status: "active" },
-        { id: 6, name: "EQR", role: "agente", email: "eqr@strivo.com", parentId: 5, status: "active" },
-        { id: 7, name: "Vex Capital", role: "agente", email: "vex@strivo.com", parentId: 5, status: "active" },
-        { id: 8, name: "S2 Invest", role: "agente", email: "s2@strivo.com", parentId: 5, status: "active" }
+        { id: 1, name: "Filipe Rosa", role: "diretoria", email: "filipe@vertic.com", parentId: null, username: "filipe.rosa", password: "FilipeStrivo", status: "active" },
+        { id: 2, name: "Diogo Wunsch", role: "diretoria", email: "diogo@strivo.com", parentId: null, username: "diogo.wunsch", password: "DiogoStrivo", status: "active" },
+        { id: 3, name: "Gustav Gorski", role: "diretoria", email: "gustav@strivo.com", parentId: null, username: "gustav.gorski", password: "GustavStrivo", status: "active" },
+        { id: 4, name: "Thiago Vicente", role: "diretoria", email: "thiago@strivo.com", parentId: null, username: "thiago.vicente", password: "ThiagoStrivo", status: "active" },
+        { id: 5, name: "Celso Pimenta", role: "lideranca", email: "celso@strivo.com", parentId: 2, username: "celso.pimenta", password: "CelsoStrivo", status: "active" },
+        { id: 6, name: "EQR", role: "agente", email: "eqr@strivo.com", parentId: 5, username: "eqr", password: "EQRStrivo", status: "active" },
+        { id: 7, name: "Vex Capital", role: "agente", email: "vex@strivo.com", parentId: 5, username: "vex.capital", password: "VexStrivo", status: "active" },
+        { id: 8, name: "S2 Invest", role: "agente", email: "s2@strivo.com", parentId: 5, username: "s2.invest", password: "S2Strivo", status: "active" }
     ],
     products: [
         { id: 1, name: "Strivo Yield 40 FIF", taxAdm: 1.2, feeCap: 0.0, splitStrivo: 60, splitLider: 15, splitAgente: 25, cnpj: "46.847.516/0001-77", administrator: "VORTX", investorType: "Qualificado", performanceFee: "20% sobre o que exceder o benchmark", benchmark: "CDI+", status: "active" },
@@ -247,8 +247,8 @@ function loadDataStore() {
     }
     try {
         let parsed = JSON.parse(data);
-        // Reset local storage if the database is out of date (missing new imported clients)
-        if (!parsed.clients || !parsed.clients.some(c => c.name === "João Silva")) {
+        // Reset local storage if the database is out of date (missing new imported clients or credentials)
+        if (!parsed.clients || !parsed.clients.some(c => c.name === "João Silva") || !parsed.users || !parsed.users[0].username) {
             localStorage.setItem('strivo_datastore', JSON.stringify(INITIAL_MOCK_DATA));
             return INITIAL_MOCK_DATA;
         }

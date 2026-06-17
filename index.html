@@ -79,6 +79,9 @@
                     <a href="#" data-target="settings" id="sidebar-link-settings" class="sidebar-link hidden">
                         <span>⚙️</span> Ajustes Funil
                     </a>
+                    <a href="#" onclick="logoutUser(event)" class="sidebar-link mt-4 text-rose-500/80 hover:text-rose-400 hover:bg-rose-950/10 !border-l-transparent">
+                        <span>🚪</span> Sair da Conta
+                    </a>
                 </nav>
             </div>
 
@@ -817,6 +820,77 @@
                     <button type="submit" class="bg-cyan-500 hover:bg-cyan-400 text-black font-bold px-5 py-2.5 rounded transition-all uppercase font-sans">Salvar Fundo</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- ================= TELA DE LOGIN (LIQUID GLASS) ================= -->
+    <div id="login-container" class="fixed inset-0 z-[9999] flex items-center justify-center bg-[#040711] overflow-hidden transition-all duration-500">
+        <!-- Liquid background animated blobs -->
+        <div class="absolute inset-0 dotted-grid opacity-40"></div>
+        <div class="liquid-blob blob-1"></div>
+        <div class="liquid-blob blob-2"></div>
+        <div class="liquid-blob blob-3"></div>
+
+        <!-- Login Card -->
+        <div class="login-card glass-card relative w-[90%] max-w-[420px] p-8 md:p-10 flex flex-col items-center space-y-6 z-10 pulse-glow">
+            <!-- Brand Logo -->
+            <div class="w-[185px] pb-4 flex justify-center border-b border-zinc-800/40">
+                <img src="assets/logo1-strivo.png" alt="Strivo Logo" class="w-full h-auto">
+            </div>
+
+            <!-- Login Header -->
+            <div class="text-center space-y-1">
+                <h3 class="text-white font-bold text-lg font-sans">Acesso ao Cockpit</h3>
+                <p class="text-zinc-500 text-xs font-mono uppercase tracking-wider">Distribuição Comercial & CRM</p>
+            </div>
+
+            <!-- Error message container -->
+            <div id="login-error-msg" class="w-full bg-rose-500/10 border border-rose-500/20 text-rose-400 p-3 rounded text-center text-xs hidden">
+                Usuário ou senha inválidos.
+            </div>
+
+            <!-- Login Form -->
+            <form id="login-form" onsubmit="attemptLogin(event)" class="w-full space-y-4 text-xs">
+                <div class="space-y-1">
+                    <label for="login-username" class="text-zinc-400 font-semibold font-mono uppercase tracking-wider text-[9px]">Usuário:</label>
+                    <input type="text" id="login-username" required placeholder="nome.sobrenome" 
+                        class="w-full bg-slate-950 border border-zinc-850 rounded p-3 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500 transition-all">
+                </div>
+                <div class="space-y-1">
+                    <label for="login-password" class="text-zinc-400 font-semibold font-mono uppercase tracking-wider text-[9px]">Senha:</label>
+                    <input type="password" id="login-password" required placeholder="••••••••" 
+                        class="w-full bg-slate-950 border border-zinc-850 rounded p-3 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500 transition-all">
+                </div>
+                <button type="submit" 
+                    class="w-full bg-cyan-500 hover:bg-cyan-400 text-black font-bold py-3.5 rounded font-mono text-xs tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+                    Entrar no Cockpit
+                </button>
+            </form>
+
+            <!-- Simulator credentials expander -->
+            <div class="w-full border-t border-zinc-900 pt-4 text-[10px]">
+                <button onclick="toggleCredentialsPanel()" class="text-cyan-400 hover:text-cyan-300 font-mono uppercase w-full flex justify-between items-center text-left">
+                    <span>🔑 Credenciais de Simulação</span>
+                    <span id="credentials-arrow">▼</span>
+                </button>
+                <div id="credentials-panel" class="hidden mt-3 max-h-[140px] overflow-y-auto pr-1 space-y-2 text-zinc-500 font-mono text-[9px]">
+                    <div class="border-b border-zinc-900 pb-1">
+                        <span class="text-zinc-400">Diretoria:</span><br>
+                        filipe.rosa / FilipeStrivo<br>
+                        diogo.wunsch / DiogoStrivo
+                    </div>
+                    <div class="border-b border-zinc-900 pb-1">
+                        <span class="text-zinc-400">Liderança:</span><br>
+                        celso.pimenta / CelsoStrivo
+                    </div>
+                    <div>
+                        <span class="text-zinc-400">Parceiros / Agentes:</span><br>
+                        eqr / EQRStrivo<br>
+                        vex.capital / VexStrivo<br>
+                        s2.invest / S2Strivo
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

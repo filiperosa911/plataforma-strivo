@@ -5,6 +5,7 @@ let db = loadDataStore();
 let currentRole = 'diretoria';
 let currentUserId = 1; // Filipe Rosa
 let currentCRMView = 'kanban';
+let listenersConnected = false;
 
 // Initialize App
 document.addEventListener('DOMContentLoaded', () => {
@@ -37,6 +38,23 @@ function initApp() {
         if (icon) icon.innerText = '☀️ Modo Claro';
     }
 
+    // CHECK SESSION
+    const loggedUserId = sessionStorage.getItem('strivo_logged_user_id');
+    if (!loggedUserId) {
+        showLoginScreen();
+        return;
+    }
+
+    currentUserId = parseInt(loggedUserId);
+    const loggedUser = db.users.find(u => u.id === currentUserId);
+    if (!loggedUser) {
+        sessionStorage.removeItem('strivo_logged_user_id');
+        showLoginScreen();
+        return;
+    }
+    currentRole = loggedUser.role;
+
+    hideLoginScreen();
     setupEventListeners();
     switchView('crm');
     renderSidebar();
@@ -101,8 +119,14 @@ function setupKanbanDragDropEvents() {
 }
 
 function setupEventListeners() {
+    if (listenersConnected) return;
+    listenersConnected = true;
+
     // Nav links
     document.querySelectorAll('.sidebar-link').forEach(link => {
+        // Ignorar o link de logout
+        if (link.getAttribute('onclick') && link.getAttribute('onclick').includes('logoutUser')) return;
+
         link.addEventListener('click', (e) => {
             e.preventDefault();
             const target = link.getAttribute('data-target');
@@ -141,6 +165,7 @@ function switchView(viewId) {
 function selectDebugRole(role, userId) {
     currentRole = role;
     currentUserId = parseInt(userId);
+    sessionStorage.setItem('strivo_logged_user_id', userId);
     renderSidebar();
     
     // Switch active view to crm to show filtered data
@@ -2097,3 +2122,83 @@ window.deleteStage = deleteStage;
 window.renameStagePrompt = renameStagePrompt;
 window.moveStageOrder = moveStageOrder;
 window.renderPipeline = renderPipeline;
+
+// ================= TELA DE LOGIN & SESSÃO LOGIC =================
+function showLoginScreen() {
+    const loginContainer = document.getElementById('login-container');
+    if (loginContainer) loginContainer.classList.remove('hidden');
+
+    const debugBar = document.querySelector('.debug-bar');
+    if (debugBar) debugBar.classList.add('hidden');
+
+    document.getElementById('login-username').value = '';
+    document.getElementById('login-password').value = '';
+    document.getElementById('login-error-msg').classList.add('hidden');
+}
+
+function hideLoginScreen() {
+    const loginContainer = document.getElementById('login-container');
+    if (loginContainer) loginContainer.classList.add('hidden');
+
+    const debugBar = document.querySelector('.debug-bar');
+    if (debugBar) debugBar.classList.remove('hidden');
+}
+
+function attemptLogin(event) {
+    if (event) event.preventDefault();
+    
+    const usernameInput = document.getElementById('login-username').value.trim().toLowerCase();
+    const passwordInput = document.getElementById('login-password').value.trim();
+    const errorMsg = document.getElementById('login-error-msg');
+    const loginCard = document.querySelector('.login-card');
+
+    // Mapeamento especial para sem acentos e normalização simples
+    const normalizedUsernameInput = usernameInput.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+    const user = db.users.find(u => {
+        if (!u.username) return false;
+        const normalizedDbUsername = u.username.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        return normalizedDbUsername === normalizedUsernameInput && u.password === passwordInput;
+    });
+
+    if (user) {
+        sessionStorage.setItem('strivo_logged_user_id', user.id);
+        errorMsg.classList.add('hidden');
+        initApp(); // Reinicializa com a nova sessão do usuário
+    } else {
+        errorMsg.classList.remove('hidden');
+        
+        // Efeito Shake no card de login
+        if (loginCard) {
+            loginCard.classList.add('shake-card');
+            setTimeout(() => {
+                loginCard.classList.remove('shake-card');
+            }, 500);
+        }
+    }
+}
+
+function logoutUser(event) {
+    if (event) event.preventDefault();
+    if (confirm("Deseja realmente sair da conta comercial?")) {
+        sessionStorage.removeItem('strivo_logged_user_id');
+        showLoginScreen();
+    }
+}
+
+function toggleCredentialsPanel() {
+    const panel = document.getElementById('credentials-panel');
+    const arrow = document.getElementById('credentials-arrow');
+    if (panel.classList.contains('hidden')) {
+        panel.classList.remove('hidden');
+        arrow.innerText = '▲';
+    } else {
+        panel.classList.add('hidden');
+        arrow.innerText = '▼';
+    }
+}
+
+// Global Exports para Login
+window.attemptLogin = attemptLogin;
+window.logoutUser = logoutUser;
+window.toggleCredentialsPanel = toggleCredentialsPanel;
