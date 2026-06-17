@@ -6,24 +6,79 @@ let currentRole = 'diretoria';
 let currentUserId = 1; // Filipe Rosa
 let currentCRMView = 'kanban';
 let listenersConnected = false;
+let supabaseClient = null;
+let supabaseMode = 'LOCAL'; // 'LOCAL' or 'CLOUD'
 
 // Initialize App
 document.addEventListener('DOMContentLoaded', () => {
     initApp();
 });
 
-function initApp() {
+async function initApp() {
+    // 1. Initial Local Load (so that if Supabase is disconnected, we still have local data)
     db = loadDataStore();
     
+    // Check Supabase Configuration
+    const supaUrl = localStorage.getItem('strivo_supabase_url');
+    const supaKey = localStorage.getItem('strivo_supabase_key');
+    
+    const cloudStatusBadge = document.getElementById('cloud-status-badge');
+    const btnMigrate = document.getElementById('btn-migrate-data');
+    const btnDisconnect = document.getElementById('btn-disconnect-supa');
+    
+    // Set config values in settings panel inputs if they exist
+    const supaUrlInput = document.getElementById('supa-url');
+    const supaKeyInput = document.getElementById('supa-anon-key');
+    if (supaUrlInput && supaUrl) supaUrlInput.value = supaUrl;
+    if (supaKeyInput && supaKey) supaKeyInput.value = supaKey;
+
+    if (supaUrl && supaKey && window.supabase) {
+        try {
+            supabaseClient = window.supabase.createClient(supaUrl, supaKey);
+            supabaseMode = 'CLOUD';
+            
+            if (cloudStatusBadge) {
+                cloudStatusBadge.innerText = 'Modo Nuvem (Online)';
+                cloudStatusBadge.className = 'w-fit px-2.5 py-1 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-450 border border-emerald-500/20 uppercase tracking-wider';
+            }
+            if (btnMigrate) {
+                btnMigrate.disabled = false;
+                btnMigrate.classList.remove('bg-slate-800', 'cursor-not-allowed', 'text-zinc-500');
+                btnMigrate.classList.add('bg-zinc-800', 'hover:bg-zinc-700', 'text-zinc-300');
+            }
+            if (btnDisconnect) btnDisconnect.classList.remove('hidden');
+            
+            // Load from cloud into global db in memory
+            await loadDataStoreFromCloud();
+        } catch (err) {
+            console.error("Erro de conexão ao Supabase. Revertendo para local:", err);
+            supabaseMode = 'LOCAL';
+            db = loadDataStore();
+        }
+    } else {
+        supabaseMode = 'LOCAL';
+        db = loadDataStore();
+        if (cloudStatusBadge) {
+            cloudStatusBadge.innerText = 'Modo Local (Offline)';
+            cloudStatusBadge.className = 'w-fit px-2.5 py-1 rounded text-[10px] font-mono font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 uppercase tracking-wider';
+        }
+        if (btnMigrate) {
+            btnMigrate.disabled = true;
+            btnMigrate.classList.add('bg-slate-800', 'cursor-not-allowed', 'text-zinc-500');
+            btnMigrate.classList.remove('bg-zinc-800', 'hover:bg-zinc-700', 'text-zinc-300');
+        }
+        if (btnDisconnect) btnDisconnect.classList.add('hidden');
+    }
+
     // Initialize standard stages if not present in db
-    if (!db.stages) {
+    if (!db.stages || db.stages.length === 0) {
         db.stages = [
             { key: 'prospect', label: 'Prospect', order: 1, colorClass: 'badge-blue' },
             { key: 'contato', label: 'Contato', order: 2, colorClass: 'badge-purple' },
             { key: 'proposta', label: 'Proposta', order: 3, colorClass: 'badge-amber' },
             { key: 'fechado', label: 'Fechado', order: 4, colorClass: 'badge-emerald' }
         ];
-        saveDataStore(db);
+        await saveDataStore(db);
     }
     
     // Theme initialization: default to 'light' since requested by user
@@ -1895,8 +1950,10 @@ function renderPipeline() {
         };
     });
 
-    const grandTotalValue = stageData.reduce((acc, s) => acc + s.totalValue, 0);
-    const grandTotalLeads = stageData.reduce((acc, s) => acc + s.leadsCount, 0);
+    // Sum only active stages (excluding 'fechado') for totals
+    const activeStageData = stageData.filter(s => s.key !== 'fechado');
+    const grandTotalValue = activeStageData.reduce((acc, s) => acc + s.totalValue, 0);
+    const grandTotalLeads = activeStageData.reduce((acc, s) => acc + s.leadsCount, 0);
     const avgTicket = grandTotalLeads > 0 ? grandTotalValue / grandTotalLeads : 0;
 
     // Update summary cards
@@ -1938,7 +1995,15 @@ function renderPipeline() {
     stageData.forEach((stage, idx) => {
         // Width goes from 100% (top) to 35% (bottom) linearly
         const widthPercent = totalStages === 1 ? 100 : 100 - (idx * (65 / (totalStages - 1)));
-        const percentage = grandTotalValue > 0 ? (stage.totalValue / grandTotalValue * 100).toFixed(1) : '0.0';
+        
+        let percentageLabel = '';
+        if (stage.key === 'fechado') {
+            percentageLabel = 'Histórico';
+        } else {
+            const percentage = grandTotalValue > 0 ? (stage.totalValue / grandTotalValue * 100).toFixed(1) : '0.0';
+            percentageLabel = `${percentage}%`;
+        }
+        
         const bgClass = colorMap[stage.colorClass] || 'pyramid-bg-zinc';
 
         // Rounded corners: top-left/top-right for first layer, bottom-left/bottom-right for last
@@ -1956,7 +2021,7 @@ function renderPipeline() {
                         <span class="pyramid-layer-leads">${stage.leadsCount} lead${stage.leadsCount !== 1 ? 's' : ''}</span>
                     </div>
                     <div class="flex items-center gap-4">
-                        <span class="pyramid-layer-leads">${percentage}%</span>
+                        <span class="pyramid-layer-leads">${percentageLabel}</span>
                         <span class="pyramid-layer-value">${formatCurrency(stage.totalValue)}</span>
                     </div>
                 </div>
@@ -1979,8 +2044,8 @@ function renderPipeline() {
         // Filter users based on visible user IDs
         const visibleUsers = db.users.filter(u => visibleUserIds.includes(u.id) && (u.role === 'agente' || u.role === 'lideranca' || u.role === 'diretoria'));
         
-        // Active stage keys
-        const activeStageKeys = stages.map(s => s.key);
+        // Active stage keys (excluding 'fechado')
+        const activeStageKeys = stages.map(s => s.key).filter(k => k !== 'fechado');
         // Leads in active stages
         const activeLeads = visibleLeads.filter(l => activeStageKeys.includes(l.status));
         
@@ -2040,7 +2105,14 @@ function renderPipeline() {
         const maxValue = Math.max(...stageData.map(s => s.totalValue), 1);
 
         tableBody.innerHTML = stageData.map(stage => {
-            const percentage = grandTotalValue > 0 ? (stage.totalValue / grandTotalValue * 100).toFixed(1) : '0.0';
+            let percentageLabel = '';
+            if (stage.key === 'fechado') {
+                percentageLabel = 'Histórico';
+            } else {
+                const percentage = grandTotalValue > 0 ? (stage.totalValue / grandTotalValue * 100).toFixed(1) : '0.0';
+                percentageLabel = `${percentage}%`;
+            }
+            
             const barWidth = (stage.totalValue / maxValue * 100).toFixed(1);
             const bgClass = colorMap[stage.colorClass] || 'pyramid-bg-zinc';
 
@@ -2062,7 +2134,7 @@ function renderPipeline() {
                     </td>
                     <td class="py-2.5 px-4 text-right font-mono text-xs text-zinc-300">${stage.leadsCount}</td>
                     <td class="py-2.5 px-4 text-right font-mono text-xs text-emerald-400 font-bold">${formatCurrency(stage.totalValue)}</td>
-                    <td class="py-2.5 px-4 text-right font-mono text-xs text-zinc-400">${percentage}%</td>
+                    <td class="py-2.5 px-4 text-right font-mono text-xs text-zinc-400">${percentageLabel}</td>
                     <td class="py-2.5 px-4">
                         <div class="pipeline-progress-bar">
                             <div class="pipeline-progress-fill" style="width: ${barWidth}%; background: ${fillColor};"></div>
@@ -2202,3 +2274,168 @@ function toggleCredentialsPanel() {
 window.attemptLogin = attemptLogin;
 window.logoutUser = logoutUser;
 window.toggleCredentialsPanel = toggleCredentialsPanel;
+
+// ==================== SUPABASE CLOUD SYNC & CONFIG ====================
+async function loadDataStoreFromCloud() {
+    try {
+        const [
+            rUsers,
+            rProducts,
+            rLeads,
+            rClients,
+            rStages,
+            rAportes,
+            rFatHistorico
+        ] = await Promise.all([
+            supabaseClient.from('users').select('*'),
+            supabaseClient.from('products').select('*'),
+            supabaseClient.from('leads').select('*'),
+            supabaseClient.from('clients').select('*'),
+            supabaseClient.from('stages').select('*'),
+            supabaseClient.from('aportes').select('*'),
+            supabaseClient.from('faturamentoHistorico').select('*')
+        ]);
+
+        if (rUsers.error) throw rUsers.error;
+        if (rProducts.error) throw rProducts.error;
+        if (rLeads.error) throw rLeads.error;
+        if (rClients.error) throw rClients.error;
+        if (rStages.error) throw rStages.error;
+        if (rAportes.error) throw rAportes.error;
+        if (rFatHistorico.error) throw rFatHistorico.error;
+
+        db = {
+            users: rUsers.data || [],
+            products: rProducts.data || [],
+            leads: rLeads.data || [],
+            clients: rClients.data || [],
+            stages: rStages.data || [],
+            aportes: rAportes.data || [],
+            faturamentoHistorico: rFatHistorico.data || []
+        };
+        
+        logSystem("Dados carregados com sucesso do Supabase na nuvem.");
+    } catch (err) {
+        console.error("Falha ao carregar do Supabase:", err);
+        logSystem("Erro de conexão ao carregar dados do Supabase. Usando localBackup.");
+        db = loadDataStore();
+    }
+}
+
+function saveSupabaseConfig(event) {
+    if (event) event.preventDefault();
+    const url = document.getElementById('supa-url').value.trim();
+    const key = document.getElementById('supa-anon-key').value.trim();
+    
+    if (!url || !key) {
+        alert("Por favor, preencha a URL e a Chave Anon do seu Supabase.");
+        return;
+    }
+    
+    localStorage.setItem('strivo_supabase_url', url);
+    localStorage.setItem('strivo_supabase_key', key);
+    alert("Configurações salvas! Conectando ao banco de dados Supabase...");
+    initApp();
+}
+
+function disconnectSupabase() {
+    if (confirm("Deseja realmente desconectar da nuvem e voltar ao Modo Local (offline)?")) {
+        localStorage.removeItem('strivo_supabase_url');
+        localStorage.removeItem('strivo_supabase_key');
+        supabaseClient = null;
+        supabaseMode = 'LOCAL';
+        alert("Modo Nuvem desconectado.");
+        initApp();
+    }
+}
+
+async function migrateLocalDataToSupabase() {
+    if (supabaseMode !== 'CLOUD' || !supabaseClient) {
+        alert("Por favor, conecte ao Supabase primeiro!");
+        return;
+    }
+    
+    const progressEl = document.getElementById('migration-progress-msg');
+    const localData = loadDataStore();
+    
+    if (progressEl) {
+        progressEl.classList.remove('hidden');
+        progressEl.innerText = "Iniciando migração...";
+    }
+    
+    try {
+        if (progressEl) progressEl.innerText = "Enviando usuários...";
+        const rUsers = await supabaseClient.from('users').upsert(localData.users);
+        if (rUsers.error) throw rUsers.error;
+        
+        if (progressEl) progressEl.innerText = "Enviando produtos...";
+        const rProducts = await supabaseClient.from('products').upsert(localData.products);
+        if (rProducts.error) throw rProducts.error;
+        
+        if (progressEl) progressEl.innerText = "Enviando estágios...";
+        const rStages = await supabaseClient.from('stages').upsert(localData.stages || []);
+        if (rStages.error) throw rStages.error;
+        
+        if (progressEl) progressEl.innerText = "Enviando leads...";
+        const rLeads = await supabaseClient.from('leads').upsert(localData.leads);
+        if (rLeads.error) throw rLeads.error;
+        
+        if (progressEl) progressEl.innerText = "Enviando clientes...";
+        const rClients = await supabaseClient.from('clients').upsert(localData.clients);
+        if (rClients.error) throw rClients.error;
+        
+        if (progressEl) progressEl.innerText = "Enviando aportes...";
+        const rAportes = await supabaseClient.from('aportes').upsert(localData.aportes);
+        if (rAportes.error) throw rAportes.error;
+        
+        if (progressEl) progressEl.innerText = "Enviando histórico de faturamento...";
+        const rFat = await supabaseClient.from('faturamentoHistorico').upsert(localData.faturamentoHistorico);
+        if (rFat.error) throw rFat.error;
+        
+        if (progressEl) {
+            progressEl.innerText = "✅ Migração de dados concluída com sucesso!";
+            setTimeout(() => progressEl.classList.add('hidden'), 5000);
+        }
+        alert("Toda a sua base local de dados foi migrada e sincronizada com sucesso no Supabase!");
+        
+        await initApp();
+    } catch (err) {
+        console.error("Erro na migração de dados:", err);
+        if (progressEl) {
+            progressEl.innerText = `❌ Erro na migração: ${err.message || err}`;
+        }
+        alert(`Erro na migração: ${err.message || err}`);
+    }
+}
+
+async function saveDataStore(data) {
+    // 1. Salvar no localStorage local (backup offline)
+    localStorage.setItem('strivo_datastore', JSON.stringify(data));
+    
+    // 2. Se modo nuvem ativo, upsert das tabelas modificadas para o Supabase
+    if (supabaseMode === 'CLOUD' && supabaseClient) {
+        try {
+            await Promise.all([
+                supabaseClient.from('users').upsert(data.users),
+                supabaseClient.from('products').upsert(data.products),
+                supabaseClient.from('stages').upsert(data.stages || []),
+                supabaseClient.from('leads').upsert(data.leads),
+                supabaseClient.from('clients').upsert(data.clients),
+                supabaseClient.from('aportes').upsert(data.aportes),
+                supabaseClient.from('faturamentoHistorico').upsert(data.faturamentoHistorico)
+            ]);
+        } catch (err) {
+            console.error("Erro na sincronização automática do Supabase:", err);
+            logSystem("Falha ao salvar alterações no Supabase. Modificações mantidas localmente.");
+        }
+    }
+}
+
+// Sobrescrever a função global saveDataStore do mock-data.js
+window.saveDataStore = saveDataStore;
+
+// Exportações globais para os formulários do index.html
+window.saveSupabaseConfig = saveSupabaseConfig;
+window.disconnectSupabase = disconnectSupabase;
+window.migrateLocalDataToSupabase = migrateLocalDataToSupabase;
+window.loadDataStoreFromCloud = loadDataStoreFromCloud;
