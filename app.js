@@ -38,7 +38,7 @@ function initApp() {
     }
 
     setupEventListeners();
-    switchView('dashboard');
+    switchView('crm');
     renderSidebar();
     renderDashboard();
     renderCRM();
@@ -143,12 +143,12 @@ function selectDebugRole(role, userId) {
     currentUserId = parseInt(userId);
     renderSidebar();
     
-    // Switch active view to dashboard to show filtered data
+    // Switch active view to crm to show filtered data
     document.querySelectorAll('.sidebar-link').forEach(l => {
         l.classList.remove('active');
-        if (l.getAttribute('data-target') === 'dashboard') l.classList.add('active');
+        if (l.getAttribute('data-target') === 'crm') l.classList.add('active');
     });
-    switchView('dashboard');
+    switchView('crm');
     
     renderCRM();
     renderFinancial();
