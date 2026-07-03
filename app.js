@@ -18,10 +18,13 @@ async function initApp() {
     // 1. Initial Local Load (so that if Supabase is disconnected, we still have local data)
     db = loadDataStore();
     
-    // Check Supabase Configuration
-    let supaUrl = localStorage.getItem('strivo_supabase_url');
-    let supaKey = localStorage.getItem('strivo_supabase_key');
-    
+    // Check Supabase Configuration (defaults point to VPS production)
+    const DEFAULT_SUPA_URL = 'https://api.strivoeduca.com.br';
+    const DEFAULT_SUPA_KEY = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc4MjQ5OTM4MCwiZXhwIjo0OTM4MTcyOTgwLCJyb2xlIjoiYW5vbiJ9.-sh4lSBcEP2wR8CDarOeiUuRlDe50kvA4RDAoCkOtTg';
+
+    let supaUrl = localStorage.getItem('strivo_supabase_url') || DEFAULT_SUPA_URL;
+    let supaKey = localStorage.getItem('strivo_supabase_key') || DEFAULT_SUPA_KEY;
+
     if (supaUrl) {
         supaUrl = supaUrl.trim().replace(/\/$/, "").replace(/\/rest\/v1\/?$/, "");
         localStorage.setItem('strivo_supabase_url', supaUrl);
