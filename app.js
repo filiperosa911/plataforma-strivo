@@ -2595,9 +2595,9 @@ async function loadDataStoreFromCloud() {
         if (rAportes.error) throw rAportes.error;
         if (rFatHistorico.error) throw rFatHistorico.error;
 
-        // Se o banco cloud estiver vazio (não migrado), usar dados locais
-        if (!rUsers.data || rUsers.data.length === 0) {
-            throw new Error("Banco de dados cloud vazio. Usando dados locais.");
+        // Se o banco cloud não estiver migrado, usar dados locais
+        if (!rUsers.data?.length || !rLeads.data?.length) {
+            throw new Error("Banco de dados cloud não migrado. Usando dados locais.");
         }
 
         const localLogs = (db && db.logs) ? db.logs : (loadDataStore().logs || []);
