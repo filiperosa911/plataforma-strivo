@@ -258,6 +258,7 @@ function switchView(viewId) {
     else if (viewId === 'approvals') renderApprovals();
     else if (viewId === 'partnerships') renderPartnerships();
     else if (viewId === 'settings') renderFunnelStages();
+    else if (viewId === 'agenda') renderAgendaView();
 }
 
 // Debug Switcher Lógica
@@ -1089,6 +1090,18 @@ function setCRMView(viewMode) {
 }
 
 // Lead Tasks Logic
+const TASK_PRIORITY_CFG = {
+    1: { border: '#ef4444', bg: 'rgba(127,29,29,0.4)' },
+    2: { border: '#f97316', bg: 'rgba(124,45,18,0.4)' },
+    3: { border: '#3b82f6', bg: 'rgba(30,58,138,0.25)' },
+    4: { border: '#52525b', bg: '' },
+};
+
+function isOverdue(task) {
+    if (!task.dueDate || task.completed) return false;
+    return task.dueDate < new Date().toISOString().split('T')[0];
+}
+
 function renderLeadTasks(leadId) {
     const lead = db.leads.find(l => l.id === leadId);
     const container = document.getElementById('lead-tasks-list');
@@ -1100,20 +1113,33 @@ function renderLeadTasks(leadId) {
     }
 
     container.innerHTML = lead.tasks.map(task => {
-        const completedClass = task.completed ? 'completed' : '';
-        const textCompletedClass = task.completed ? 'task-text-completed' : '';
-        const checkedAttr = task.completed ? 'checked' : '';
-        
+        const p = task.priority || 4;
+        const pc = TASK_PRIORITY_CFG[p];
+        const doneClass = task.completed ? 'opacity-50' : '';
+        const textClass = task.completed ? 'line-through text-zinc-500' : 'text-zinc-200';
+        const overdueClass = isOverdue(task) ? 'text-red-500' : 'text-zinc-500';
+        const subtasks = task.subtasks || [];
+        const subtaskDone = subtasks.filter(s => s.completed).length;
+        const labelHtml = task.label
+            ? `<span class="px-1.5 py-0.5 rounded-full text-[8px] font-mono border ${task.label === 'urgente' ? 'border-red-800/60 text-red-400' : 'border-blue-800/60 text-blue-400'}">${task.label}</span>`
+            : '';
+        const subtaskHtml = subtasks.length > 0
+            ? `<span class="text-[8px] font-mono text-zinc-600">⊟ ${subtaskDone}/${subtasks.length}</span>`
+            : '';
         return `
-            <div class="task-item ${completedClass} flex items-center justify-between">
-                <div class="flex items-start gap-2.5 flex-1 min-w-0">
-                    <input type="checkbox" ${checkedAttr} onclick="toggleLeadTask(${leadId}, ${task.id})" class="mt-0.5 rounded border-zinc-800 text-cyan-500 focus:ring-0 focus:ring-offset-0 bg-slate-900 cursor-pointer">
-                    <div class="min-w-0">
-                        <p class="text-zinc-200 text-xs font-sans break-all ${textCompletedClass}">${task.text}</p>
-                        <span class="text-[9px] font-mono text-zinc-500">Prazo: ${formatDate(task.dueDate)}</span>
+            <div class="${doneClass} flex items-start gap-2 py-2 border-b border-zinc-900/50 last:border-0 cursor-pointer hover:bg-white/[0.02] rounded px-1 -mx-1 transition-colors"
+                 onclick="openTaskDetailModal(${leadId}, ${task.id})">
+                <button type="button"
+                    onclick="event.stopPropagation(); toggleLeadTask(${leadId}, ${task.id})"
+                    class="w-4 h-4 rounded-full border-2 flex-shrink-0 mt-0.5 transition-colors"
+                    style="border-color:${pc.border}; background:${task.completed ? pc.bg : 'transparent'}"></button>
+                <div class="flex-1 min-w-0">
+                    <p class="text-xs font-sans truncate ${textClass}">${task.text}</p>
+                    <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        ${task.dueDate ? `<span class="text-[9px] font-mono ${overdueClass}">${formatDate(task.dueDate)}${task.dueTime ? ' ' + task.dueTime : ''}</span>` : ''}
+                        ${labelHtml}${subtaskHtml}
                     </div>
                 </div>
-                <button type="button" onclick="deleteLeadTask(${leadId}, ${task.id})" class="text-red-500/70 hover:text-red-400 font-mono text-[9px] uppercase ml-2 select-none">[ Excluir ]</button>
             </div>
         `;
     }).join('');
@@ -1128,32 +1154,21 @@ function addCurrentLeadTask() {
 
     const taskText = document.getElementById('new-task-text').value.trim();
     let taskDate = document.getElementById('new-task-date').value;
+    const priority = parseInt(document.getElementById('new-task-priority')?.value || '3');
+    const label = document.getElementById('new-task-label')?.value || '';
 
-    if (!taskText) {
-        alert('Por favor, descreva a tarefa.');
-        return;
-    }
-
-    if (!taskDate) {
-        taskDate = new Date().toISOString().split('T')[0];
-    }
+    if (!taskText) { alert('Por favor, descreva a tarefa.'); return; }
+    if (!taskDate) taskDate = new Date().toISOString().split('T')[0];
 
     if (!lead.tasks) lead.tasks = [];
 
     const newTaskId = lead.tasks.length > 0 ? Math.max(...lead.tasks.map(t => t.id)) + 1 : 1;
-    lead.tasks.push({
-        id: newTaskId,
-        text: taskText,
-        dueDate: taskDate,
-        completed: false
-    });
+    lead.tasks.push({ id: newTaskId, text: taskText, description: '', dueDate: taskDate, dueTime: '', completed: false, priority, label, subtasks: [] });
 
     saveDataStore(db);
     logSystem(`Tarefa agendada para lead "${lead.name}": ${taskText}`);
-    
     document.getElementById('new-task-text').value = '';
     document.getElementById('new-task-date').value = new Date().toISOString().split('T')[0];
-    
     renderLeadTasks(leadId);
     renderCRM();
 }
@@ -1161,14 +1176,11 @@ function addCurrentLeadTask() {
 function toggleLeadTask(leadId, taskId) {
     const lead = db.leads.find(l => l.id === leadId);
     if (!lead || !lead.tasks) return;
-
     const task = lead.tasks.find(t => t.id === taskId);
     if (!task) return;
-
     task.completed = !task.completed;
     saveDataStore(db);
     logSystem(`Tarefa "${task.text}" no lead "${lead.name}" marcada como ${task.completed ? 'CONCLUÍDA' : 'PENDENTE'}`);
-    
     renderLeadTasks(leadId);
     renderCRM();
 }
@@ -1176,17 +1188,242 @@ function toggleLeadTask(leadId, taskId) {
 function deleteLeadTask(leadId, taskId) {
     const lead = db.leads.find(l => l.id === leadId);
     if (!lead || !lead.tasks) return;
-
     const taskIndex = lead.tasks.findIndex(t => t.id === taskId);
     if (taskIndex === -1) return;
-
     const taskText = lead.tasks[taskIndex].text;
     lead.tasks.splice(taskIndex, 1);
     saveDataStore(db);
     logSystem(`Tarefa "${taskText}" excluída do lead "${lead.name}"`);
-    
     renderLeadTasks(leadId);
     renderCRM();
+}
+
+// Task Detail Modal
+let _tdmLeadId = null, _tdmTaskId = null, _tdmPriority = 3, _tdmLabel = '';
+
+function openTaskDetailModal(leadId, taskId) {
+    const lead = db.leads.find(l => l.id === leadId);
+    if (!lead) return;
+    const task = lead.tasks.find(t => t.id === taskId);
+    if (!task) return;
+    _tdmLeadId = leadId; _tdmTaskId = taskId;
+    _tdmPriority = task.priority || 3; _tdmLabel = task.label || '';
+    document.getElementById('tdm-title').value = task.text || '';
+    document.getElementById('tdm-lead-name').textContent = lead.name;
+    document.getElementById('tdm-due-date').value = task.dueDate || '';
+    document.getElementById('tdm-due-time').value = task.dueTime || '';
+    document.getElementById('tdm-description').value = task.description || '';
+    _updateTdmPriorityCircle(); _updateTdmPriorityPills(); _updateTdmLabelPills(); _renderSubtasks();
+    document.getElementById('task-detail-modal').classList.remove('hidden');
+}
+
+function closeTaskDetailModal() {
+    document.getElementById('task-detail-modal').classList.add('hidden');
+    _tdmLeadId = null; _tdmTaskId = null;
+}
+
+function setTaskPriority(p) { _tdmPriority = p; _updateTdmPriorityCircle(); _updateTdmPriorityPills(); }
+function setTaskLabel(l) { _tdmLabel = l; _updateTdmLabelPills(); }
+
+function _updateTdmPriorityCircle() {
+    const el = document.getElementById('tdm-priority-circle');
+    if (!el) return;
+    const pc = TASK_PRIORITY_CFG[_tdmPriority] || TASK_PRIORITY_CFG[4];
+    el.style.borderColor = pc.border;
+    el.style.background = _tdmPriority <= 2 ? pc.bg : '';
+}
+
+function _updateTdmPriorityPills() {
+    document.querySelectorAll('.tdm-priority-pill').forEach(btn => {
+        btn.style.opacity = parseInt(btn.dataset.p) === _tdmPriority ? '1' : '0.3';
+    });
+}
+
+function _updateTdmLabelPills() {
+    document.querySelectorAll('.tdm-label-pill').forEach(btn => {
+        btn.style.opacity = btn.dataset.l === _tdmLabel ? '1' : '0.3';
+    });
+}
+
+function _renderSubtasks() {
+    const lead = db.leads.find(l => l.id === _tdmLeadId);
+    const task = lead?.tasks.find(t => t.id === _tdmTaskId);
+    const container = document.getElementById('tdm-subtasks-list');
+    const countEl = document.getElementById('tdm-subtask-count');
+    if (!container || !task) return;
+    const subtasks = task.subtasks || [];
+    const done = subtasks.filter(s => s.completed).length;
+    if (countEl) countEl.textContent = subtasks.length > 0 ? `${done}/${subtasks.length}` : '';
+    container.innerHTML = subtasks.map(s => `
+        <div class="flex items-center gap-2 group py-0.5">
+            <input type="checkbox" ${s.completed ? 'checked' : ''}
+                onchange="toggleSubtask(${s.id})"
+                class="rounded border-zinc-700 text-cyan-500 focus:ring-0 bg-slate-900 cursor-pointer flex-shrink-0">
+            <span class="text-xs flex-1 ${s.completed ? 'line-through text-zinc-500' : 'text-zinc-300'}">${s.text}</span>
+            <button onclick="deleteSubtask(${s.id})" class="opacity-0 group-hover:opacity-100 text-red-500/50 hover:text-red-400 font-mono text-sm leading-none transition-opacity">×</button>
+        </div>
+    `).join('');
+}
+
+function addSubtask() {
+    const input = document.getElementById('tdm-new-subtask');
+    const text = input?.value.trim();
+    if (!text || !_tdmLeadId || !_tdmTaskId) return;
+    const lead = db.leads.find(l => l.id === _tdmLeadId);
+    const task = lead?.tasks.find(t => t.id === _tdmTaskId);
+    if (!task) return;
+    if (!task.subtasks) task.subtasks = [];
+    const newId = task.subtasks.length > 0 ? Math.max(...task.subtasks.map(s => s.id)) + 1 : 1;
+    task.subtasks.push({ id: newId, text, completed: false });
+    saveDataStore(db);
+    input.value = '';
+    _renderSubtasks();
+}
+
+function toggleSubtask(subtaskId) {
+    const lead = db.leads.find(l => l.id === _tdmLeadId);
+    const task = lead?.tasks.find(t => t.id === _tdmTaskId);
+    const sub = task?.subtasks?.find(s => s.id === subtaskId);
+    if (!sub) return;
+    sub.completed = !sub.completed;
+    saveDataStore(db);
+    _renderSubtasks();
+}
+
+function deleteSubtask(subtaskId) {
+    const lead = db.leads.find(l => l.id === _tdmLeadId);
+    const task = lead?.tasks.find(t => t.id === _tdmTaskId);
+    if (!task?.subtasks) return;
+    task.subtasks = task.subtasks.filter(s => s.id !== subtaskId);
+    saveDataStore(db);
+    _renderSubtasks();
+}
+
+function saveTaskDetail() {
+    if (!_tdmLeadId || !_tdmTaskId) return;
+    const lead = db.leads.find(l => l.id === _tdmLeadId);
+    const task = lead?.tasks.find(t => t.id === _tdmTaskId);
+    if (!task) return;
+    task.text = document.getElementById('tdm-title').value.trim() || task.text;
+    task.dueDate = document.getElementById('tdm-due-date').value;
+    task.dueTime = document.getElementById('tdm-due-time').value;
+    task.description = document.getElementById('tdm-description').value;
+    task.priority = _tdmPriority;
+    task.label = _tdmLabel;
+    saveDataStore(db);
+    renderLeadTasks(_tdmLeadId);
+    closeTaskDetailModal();
+    const agendaView = document.getElementById('view-agenda');
+    if (agendaView && !agendaView.classList.contains('hidden')) renderAgendaView();
+}
+
+function deleteCurrentTask() {
+    if (!_tdmLeadId || !_tdmTaskId || !confirm('Excluir esta tarefa?')) return;
+    const lead = db.leads.find(l => l.id === _tdmLeadId);
+    if (!lead) return;
+    lead.tasks = lead.tasks.filter(t => t.id !== _tdmTaskId);
+    saveDataStore(db);
+    renderLeadTasks(_tdmLeadId);
+    closeTaskDetailModal();
+    const agendaView = document.getElementById('view-agenda');
+    if (agendaView && !agendaView.classList.contains('hidden')) renderAgendaView();
+}
+
+// Agenda View
+function renderAgendaView() {
+    try {
+        _renderAgendaWeekStrip();
+        _renderAgendaGroups();
+    } catch (err) {
+        console.error('[Agenda] renderAgendaView error:', err);
+        const c = document.getElementById('agenda-task-groups');
+        if (c) c.innerHTML = `<div class="py-8 text-center font-mono text-xs text-red-400">Erro ao carregar agenda: ${err.message}</div>`;
+    }
+}
+
+function _renderAgendaWeekStrip() {
+    const container = document.getElementById('agenda-week-strip');
+    if (!container) return;
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const dayNames = ['D','S','T','Q','Q','S','S'];
+    const allTasks = db.leads.flatMap(l => (l.tasks || []).filter(t => !t.completed).map(t => t.dueDate));
+    const days = Array.from({ length: 8 }, (_, i) => { const d = new Date(today); d.setDate(today.getDate() + i - 1); return d; });
+    container.innerHTML = days.map(d => {
+        const ds = d.toISOString().split('T')[0];
+        const isToday = ds === todayStr;
+        const hasTasks = allTasks.includes(ds);
+        return `<div class="flex flex-col items-center flex-shrink-0 w-10 gap-0.5">
+            <span class="text-[9px] font-mono text-zinc-600">${dayNames[d.getDay()]}</span>
+            <div class="${isToday ? 'bg-rose-500 text-white' : 'bg-slate-900 border border-zinc-800 text-zinc-400'} w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold">${d.getDate()}</div>
+            <div class="w-1.5 h-1.5 rounded-full ${hasTasks ? 'bg-cyan-500' : 'bg-transparent'}"></div>
+        </div>`;
+    }).join('');
+}
+
+function _renderAgendaGroups() {
+    const container = document.getElementById('agenda-task-groups');
+    if (!container) return;
+    const today = new Date().toISOString().split('T')[0];
+    const visibleIds = getVisibleUserIds();
+    const allTasks = db.leads
+        .filter(l => visibleIds.includes(l.agentId))
+        .flatMap(l => (l.tasks || []).filter(t => !t.completed).map(t => ({ ...t, leadId: l.id, leadName: l.name })));
+
+    const overdue = allTasks.filter(t => t.dueDate && t.dueDate < today);
+    const todayTasks = allTasks.filter(t => t.dueDate === today);
+    const noDate = allTasks.filter(t => !t.dueDate);
+    const upcoming = allTasks.filter(t => t.dueDate && t.dueDate > today);
+    const byDate = upcoming.reduce((acc, t) => { (acc[t.dueDate] = acc[t.dueDate] || []).push(t); return acc; }, {});
+
+    let html = '';
+    if (overdue.length) html += _agendaGroup('🔴 Atrasadas', overdue, 'text-red-400');
+    if (todayTasks.length) html += _agendaGroup(`📅 Hoje · ${_fmtAgendaDate(today)}`, todayTasks, 'text-cyan-400');
+    Object.entries(byDate).sort(([a],[b]) => a.localeCompare(b)).forEach(([date, tasks]) => {
+        html += _agendaGroup(_fmtAgendaDate(date), tasks, 'text-zinc-300');
+    });
+    if (noDate.length) html += _agendaGroup('Sem data', noDate, 'text-zinc-500');
+    if (!html) html = `<div class="py-16 text-center text-zinc-300 font-mono text-sm border border-zinc-800 rounded-xl">Nenhuma tarefa pendente.</div>`;
+    container.innerHTML = html;
+}
+
+function _agendaGroup(title, tasks, titleClass) {
+    const rows = [...tasks]
+        .sort((a, b) => (a.priority || 4) - (b.priority || 4))
+        .map(task => {
+            const pc = TASK_PRIORITY_CFG[task.priority || 4];
+            const labelHtml = task.label
+                ? `<span class="px-1.5 py-0.5 rounded-full text-[8px] font-mono border ${task.label === 'urgente' ? 'border-red-800/60 text-red-400' : 'border-blue-800/60 text-blue-400'}">${task.label}</span>`
+                : '';
+            const subtasks = task.subtasks || [];
+            const subtaskHtml = subtasks.length ? `<span class="text-[8px] font-mono text-zinc-600">⊟ ${subtasks.filter(s=>s.completed).length}/${subtasks.length}</span>` : '';
+            return `<div class="flex items-start gap-3 py-3 border-b border-zinc-900/60 last:border-0 cursor-pointer hover:bg-white/[0.02] rounded px-2 -mx-2 transition-colors"
+                         onclick="openTaskDetailModal(${task.leadId}, ${task.id})">
+                <div class="w-4 h-4 rounded-full border-2 flex-shrink-0 mt-0.5" style="border-color:${pc.border}"></div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm text-zinc-200 font-medium truncate">${task.text}</p>
+                    <div class="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span class="text-[9px] font-mono text-zinc-600">${task.leadName}</span>
+                        ${task.dueTime ? `<span class="text-[9px] font-mono text-zinc-500">${task.dueTime}</span>` : ''}
+                        ${labelHtml}${subtaskHtml}
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    return `<div>
+        <div class="font-mono text-[10px] uppercase tracking-wider ${titleClass} mb-3">${title}</div>
+        <div class="bg-[#0b1022] border border-zinc-900 rounded-xl px-4 py-1">${rows}</div>
+    </div>`;
+}
+
+function _fmtAgendaDate(dateStr) {
+    const d = new Date(dateStr + 'T12:00:00');
+    const today = new Date().toISOString().split('T')[0];
+    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    if (dateStr === today) return 'Hoje';
+    if (dateStr === tomorrowStr) return 'Amanhã';
+    return d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'short' });
 }
 
 // Lead Attachments Logic
@@ -2229,6 +2466,16 @@ window.setCRMView = setCRMView;
 window.addCurrentLeadTask = addCurrentLeadTask;
 window.toggleLeadTask = toggleLeadTask;
 window.deleteLeadTask = deleteLeadTask;
+window.openTaskDetailModal = openTaskDetailModal;
+window.closeTaskDetailModal = closeTaskDetailModal;
+window.saveTaskDetail = saveTaskDetail;
+window.deleteCurrentTask = deleteCurrentTask;
+window.setTaskPriority = setTaskPriority;
+window.setTaskLabel = setTaskLabel;
+window.addSubtask = addSubtask;
+window.toggleSubtask = toggleSubtask;
+window.deleteSubtask = deleteSubtask;
+window.renderAgendaView = renderAgendaView;
 window.uploadCurrentLeadFile = uploadCurrentLeadFile;
 window.deleteLeadAttachment = deleteLeadAttachment;
 window.downloadLeadAttachment = downloadLeadAttachment;
@@ -2348,6 +2595,12 @@ async function loadDataStoreFromCloud() {
         if (rAportes.error) throw rAportes.error;
         if (rFatHistorico.error) throw rFatHistorico.error;
 
+        // Se o banco cloud estiver vazio (não migrado), usar dados locais
+        if (!rUsers.data || rUsers.data.length === 0) {
+            throw new Error("Banco de dados cloud vazio. Usando dados locais.");
+        }
+
+        const localLogs = (db && db.logs) ? db.logs : (loadDataStore().logs || []);
         db = {
             users: rUsers.data || [],
             products: rProducts.data || [],
@@ -2355,14 +2608,15 @@ async function loadDataStoreFromCloud() {
             clients: rClients.data || [],
             stages: rStages.data || [],
             aportes: rAportes.data || [],
-            faturamentoHistorico: rFatHistorico.data || []
+            faturamentoHistorico: rFatHistorico.data || [],
+            logs: localLogs
         };
-        
+
         logSystem("Dados carregados com sucesso do Supabase na nuvem.");
     } catch (err) {
         console.error("Falha ao carregar do Supabase:", err);
-        logSystem("Erro de conexão ao carregar dados do Supabase. Usando localBackup.");
         db = loadDataStore();
+        logSystem("Erro de conexão ao Supabase. Revertendo para local.");
     }
 }
 

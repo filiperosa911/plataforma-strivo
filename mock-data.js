@@ -36,8 +36,10 @@ const INITIAL_MOCK_DATA = {
                 { name: "declaracao_bens_carlos.pdf", size: "1.2 MB", date: "2026-05-12" }
             ],
             tasks: [
-                { id: 1, text: "Enviar apresentação institucional", dueDate: "2026-06-15", completed: false },
-                { id: 2, text: "Ligar para agendar call de alinhamento", dueDate: "2026-06-12", completed: true }
+                { id: 1, text: "Enviar apresentação institucional", dueDate: "2026-06-15", dueTime: "", completed: false, priority: 2, label: "urgente", description: "Incluir slides sobre fundo Strivo Yield 40 e performance histórica.", subtasks: [{ id: 1, text: "Preparar slides de performance", completed: true }, { id: 2, text: "Revisar com Filipe antes de enviar", completed: false }] },
+                { id: 2, text: "Ligar para agendar call de alinhamento", dueDate: "2026-06-12", dueTime: "", completed: true, priority: 1, label: "urgente", description: "", subtasks: [] },
+                { id: 3, text: "Follow-up: retorno sobre apresentação", dueDate: "2026-07-03", dueTime: "10:00", completed: false, priority: 1, label: "urgente", description: "Carlos disse que retornaria após reunião interna do dia 2.", subtasks: [] },
+                { id: 4, text: "Preparar simulação de alocação personalizada", dueDate: "2026-07-07", dueTime: "", completed: false, priority: 2, label: "", description: "Simular alocação de R$ 500k no Yield 40 com cenário de CDI+2%.", subtasks: [{ id: 1, text: "Gerar relatório de projeção", completed: false }, { id: 2, text: "Incluir comparativo com concorrentes", completed: false }] }
             ]
         },
         { 
@@ -56,7 +58,9 @@ const INITIAL_MOCK_DATA = {
             createdDate: "2026-05-15",
             attachments: [],
             tasks: [
-                { id: 1, text: "Revisar escopo técnico com equipe Tech", dueDate: "2026-06-18", completed: false }
+                { id: 1, text: "Revisar escopo técnico com equipe Tech", dueDate: "2026-06-18", dueTime: "", completed: false, priority: 2, label: "moderado", description: "Verificar compatibilidade com sistema legado da consultoria.", subtasks: [] },
+                { id: 2, text: "Enviar proposta revisada com novo modelo de fee", dueDate: "2026-07-04", dueTime: "09:00", completed: false, priority: 1, label: "urgente", description: "Fernanda aguarda proposta para apresentar ao sócio.", subtasks: [{ id: 1, text: "Ajustar split no modelo", completed: true }, { id: 2, text: "Validar com jurídico", completed: false }] },
+                { id: 3, text: "Agendar visita presencial no Rio", dueDate: "2026-07-08", dueTime: "", completed: false, priority: 3, label: "", description: "", subtasks: [] }
             ]
         },
         { 
@@ -77,7 +81,9 @@ const INITIAL_MOCK_DATA = {
                 { name: "proposta_comercial_strivo_v1.pdf", size: "2.4 MB", date: "2026-05-21" }
             ],
             tasks: [
-                { id: 1, text: "Apresentar proposta de comissões para sócios", dueDate: "2026-06-14", completed: false }
+                { id: 1, text: "Apresentar proposta de comissões para sócios", dueDate: "2026-06-14", dueTime: "", completed: false, priority: 1, label: "urgente", description: "Holding tem 3 sócios. Cada um deve assinar a proposta individualmente.", subtasks: [{ id: 1, text: "Imprimir 3 vias da proposta", completed: false }, { id: 2, text: "Confirmar presença dos 3 sócios", completed: false }] },
+                { id: 2, text: "Aguardar deliberação interna da holding", dueDate: "2026-07-05", dueTime: "", completed: false, priority: 3, label: "moderado", description: "Roberto disse que os sócios se reúnem toda primeira quinta.", subtasks: [] },
+                { id: 3, text: "Reunião presencial em BH para assinatura", dueDate: "2026-07-10", dueTime: "14:00", completed: false, priority: 2, label: "", description: "Confirmar local: escritório Andrade & Andrade, Av. Getúlio Vargas.", subtasks: [] }
             ]
         },
         { 
@@ -114,7 +120,8 @@ const INITIAL_MOCK_DATA = {
             createdDate: "2026-05-25",
             attachments: [],
             tasks: [
-                { id: 1, text: "Configurar simulação de split no dashboard", dueDate: "2026-06-16", completed: false }
+                { id: 1, text: "Configurar simulação de split 50/50 no dashboard", dueDate: "2026-06-16", dueTime: "", completed: false, priority: 3, label: "moderado", description: "Julia quer ver o split entre EQR e Vex Capital funcionando no relatório.", subtasks: [] },
+                { id: 2, text: "Enviar acesso ao portal de demonstração", dueDate: "2026-07-03", dueTime: "11:30", completed: false, priority: 2, label: "moderado", description: "Preparar login temporário e instruções de uso.", subtasks: [{ id: 1, text: "Criar login de demo", completed: true }, { id: 2, text: "Gravar vídeo tutorial rápido", completed: false }] }
             ]
         },
         { 
@@ -132,7 +139,11 @@ const INITIAL_MOCK_DATA = {
             splits: [{ agentId: 8, pct: 100 }], 
             createdDate: "2026-05-28",
             attachments: [],
-            tasks: []
+            tasks: [
+                { id: 1, text: "Primeiro contato via WhatsApp", dueDate: "2026-06-28", dueTime: "", completed: false, priority: 2, label: "urgente", description: "Geraldo foi indicado por Lucas Pereira. Mencionar essa conexão no primeiro contato.", subtasks: [] },
+                { id: 2, text: "Qualificação patrimonial por telefone", dueDate: "2026-07-04", dueTime: "15:00", completed: false, priority: 3, label: "", description: "Verificar perfil de investidor e ticket mínimo.", subtasks: [] },
+                { id: 3, text: "Enviar material sobre Swiss CASH", dueDate: "2026-07-09", dueTime: "", completed: false, priority: 4, label: "", description: "", subtasks: [] }
+            ]
         },
         { id: 401, name: "João Silva", phone: "", email: "", source: "Importação dados-crm.csv", extraInfo: "Alocação no fundo Triumph FIF Classe FIC Multimercado CP", status: "fechado", productId: 4, agentId: 8, leaderId: 5, value: 2710457.0, splits: [{ agentId: 8, pct: 100 }], clientCode: "CLI-TRI-501", createdDate: "2026-06-09", attachments: [], tasks: [] },
         { id: 402, name: "Maria Oliveira", phone: "", email: "", source: "Importação dados-crm.csv", extraInfo: "Alocação no fundo Triumph FIF Classe FIC Multimercado CP", status: "fechado", productId: 4, agentId: 8, leaderId: 5, value: 7366669.0, splits: [{ agentId: 8, pct: 100 }], clientCode: "CLI-TRI-502", createdDate: "2026-06-12", attachments: [], tasks: [] },
@@ -248,7 +259,7 @@ function loadDataStore() {
     try {
         let parsed = JSON.parse(data);
         // Reset local storage if the database is out of date (missing new imported clients or credentials)
-        if (!parsed.clients || !parsed.clients.some(c => c.name === "João Silva") || !parsed.users || !parsed.users[0].username) {
+        if (!parsed.clients || !parsed.clients.some(c => c.name === "João Silva") || !parsed.users || !parsed.users[0].username || !parsed.leads || parsed.leads.length === 0) {
             localStorage.setItem('strivo_datastore', JSON.stringify(INITIAL_MOCK_DATA));
             return INITIAL_MOCK_DATA;
         }

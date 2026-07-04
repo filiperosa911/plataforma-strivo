@@ -83,6 +83,9 @@
                     <a href="#" data-target="partnerships" class="sidebar-link">
                         <span>💼</span> Parcerias / Cadastro
                     </a>
+                    <a href="#" data-target="agenda" class="sidebar-link">
+                        <span>📅</span> Agenda
+                    </a>
                     <a href="#" data-target="dashboard" class="sidebar-link">
                         <span>📊</span> Painel Executivo
                     </a>
@@ -713,6 +716,21 @@
                     </div>
                 </div>
             </div>
+
+            <!-- ================= view-agenda ================= -->
+            <div id="view-agenda" class="app-view hidden space-y-6">
+                <div>
+                    <h2 class="text-2xl font-extrabold tracking-tight text-white font-sans">Agenda</h2>
+                    <p class="text-zinc-500 text-xs mt-1 font-mono">Próximos passos e tarefas de todos os leads</p>
+                </div>
+                <div id="agenda-week-strip" class="flex gap-2 overflow-x-auto pb-2">
+                    <span class="text-[10px] font-mono text-zinc-500">Carregando...</span>
+                </div>
+                <div id="agenda-task-groups" class="space-y-6">
+                    <span class="text-[10px] font-mono text-zinc-500">Carregando tarefas...</span>
+                </div>
+            </div>
+
     </div>
 
     </main>
@@ -833,14 +851,27 @@
                             <div class="text-[9px] font-mono text-zinc-500 uppercase">Agendar Nova Tarefa</div>
                             <input type="text" id="new-task-text" placeholder="O que precisa ser feito?"
                                 class="w-full bg-slate-900 border border-zinc-800 rounded p-1.5 text-zinc-200 text-xs focus:outline-none focus:border-cyan-500">
-                            <div class="flex gap-2">
+                            <div class="flex gap-1.5 flex-wrap">
                                 <input type="date" id="new-task-date"
-                                    class="bg-slate-900 border border-zinc-800 rounded p-1 text-zinc-300 text-xs font-mono focus:outline-none focus:border-cyan-500 flex-1">
-                                <button type="button" onclick="addCurrentLeadTask()"
-                                    class="bg-zinc-850 hover:bg-zinc-800 border border-zinc-850 text-zinc-300 font-mono text-[10px] px-3 py-1 rounded transition-colors uppercase font-bold">
-                                    Agendar
-                                </button>
+                                    class="bg-slate-900 border border-zinc-800 rounded p-1 text-zinc-300 text-xs font-mono focus:outline-none focus:border-cyan-500 flex-1 min-w-[100px]">
+                                <select id="new-task-priority"
+                                    class="bg-slate-900 border border-zinc-800 rounded p-1 text-zinc-300 text-xs font-mono focus:outline-none focus:border-cyan-500">
+                                    <option value="1">P1 Urgente</option>
+                                    <option value="2">P2 Moderado</option>
+                                    <option value="3" selected>P3 Normal</option>
+                                    <option value="4">P4 Baixo</option>
+                                </select>
+                                <select id="new-task-label"
+                                    class="bg-slate-900 border border-zinc-800 rounded p-1 text-zinc-300 text-xs font-mono focus:outline-none focus:border-cyan-500">
+                                    <option value="">Sem label</option>
+                                    <option value="urgente">Urgente</option>
+                                    <option value="moderado">Moderado</option>
+                                </select>
                             </div>
+                            <button type="button" onclick="addCurrentLeadTask()"
+                                class="w-full bg-zinc-850 hover:bg-zinc-800 border border-zinc-850 text-zinc-300 font-mono text-[10px] px-3 py-1.5 rounded transition-colors uppercase font-bold">
+                                + Agendar Tarefa
+                            </button>
                         </div>
                     </div>
 
@@ -869,6 +900,70 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Detalhe de Tarefa -->
+    <div id="task-detail-modal" class="modal-overlay fixed inset-0 flex items-center justify-center z-50 hidden">
+        <div class="bg-[#0b1022] border border-zinc-800 p-6 rounded-xl w-[95%] max-w-md max-h-[90vh] overflow-y-auto space-y-5">
+            <div class="flex items-start justify-between gap-3">
+                <div class="flex items-center gap-3 flex-1 min-w-0">
+                    <div id="tdm-priority-circle" class="w-5 h-5 rounded-full border-2 flex-shrink-0 transition-colors"></div>
+                    <input id="tdm-title" type="text"
+                        class="bg-transparent text-white text-base font-bold w-full focus:outline-none border-b border-transparent focus:border-zinc-700 pb-0.5 transition-colors">
+                </div>
+                <button onclick="closeTaskDetailModal()" class="text-zinc-500 hover:text-white font-mono text-sm flex-shrink-0 mt-0.5">[ ✕ ]</button>
+            </div>
+            <div class="flex items-center gap-2 text-[10px] font-mono text-zinc-500 -mt-2">
+                <span>📁</span><span id="tdm-lead-name">—</span>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="bg-slate-950/60 border border-zinc-900 rounded-lg p-3 space-y-1.5">
+                    <div class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">Vencimento</div>
+                    <input id="tdm-due-date" type="date" class="bg-transparent text-zinc-200 text-xs font-mono focus:outline-none w-full">
+                    <input id="tdm-due-time" type="time" class="bg-transparent text-zinc-400 text-[10px] font-mono focus:outline-none w-full">
+                </div>
+                <div class="bg-slate-950/60 border border-zinc-900 rounded-lg p-3 space-y-1.5">
+                    <div class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">Prioridade</div>
+                    <div class="flex gap-1 mt-1" id="tdm-priority-pills">
+                        <button onclick="setTaskPriority(1)" data-p="1" class="tdm-priority-pill px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border border-red-800/60 text-red-400">P1</button>
+                        <button onclick="setTaskPriority(2)" data-p="2" class="tdm-priority-pill px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border border-orange-800/60 text-orange-400">P2</button>
+                        <button onclick="setTaskPriority(3)" data-p="3" class="tdm-priority-pill px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border border-blue-800/60 text-blue-400">P3</button>
+                        <button onclick="setTaskPriority(4)" data-p="4" class="tdm-priority-pill px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border border-zinc-700/60 text-zinc-500">P4</button>
+                    </div>
+                </div>
+            </div>
+            <div class="space-y-2">
+                <div class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">Label</div>
+                <div class="flex gap-2" id="tdm-label-pills">
+                    <button onclick="setTaskLabel('urgente')" data-l="urgente" class="tdm-label-pill px-3 py-1 rounded-full text-[10px] font-mono border border-red-900/60 text-red-400 transition-opacity">Urgente</button>
+                    <button onclick="setTaskLabel('moderado')" data-l="moderado" class="tdm-label-pill px-3 py-1 rounded-full text-[10px] font-mono border border-blue-900/60 text-blue-400 transition-opacity">Moderado</button>
+                    <button onclick="setTaskLabel('')" data-l="" class="tdm-label-pill px-3 py-1 rounded-full text-[10px] font-mono border border-zinc-800/60 text-zinc-500 transition-opacity">Nenhum</button>
+                </div>
+            </div>
+            <div class="space-y-2">
+                <div class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">Descrição</div>
+                <textarea id="tdm-description" rows="2" placeholder="Adicionar descrição..."
+                    class="w-full bg-slate-950/60 border border-zinc-900 rounded-lg p-3 text-zinc-300 text-xs focus:outline-none focus:border-cyan-800/50 resize-none transition-colors"></textarea>
+            </div>
+            <div class="space-y-2">
+                <div class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider flex items-center justify-between">
+                    <span>Subtarefas</span>
+                    <span id="tdm-subtask-count" class="text-zinc-600 normal-case font-sans text-xs"></span>
+                </div>
+                <div id="tdm-subtasks-list" class="space-y-1.5"></div>
+                <div class="flex gap-2 mt-1">
+                    <input id="tdm-new-subtask" type="text" placeholder="+ Adicionar subtarefa"
+                        class="flex-1 bg-slate-950/40 border border-zinc-900 rounded p-2 text-zinc-300 text-xs focus:outline-none focus:border-cyan-800/50 transition-colors"
+                        onkeydown="if(event.key==='Enter'){addSubtask()}">
+                    <button onclick="addSubtask()" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-mono text-[9px] px-2 py-1 rounded uppercase transition-colors">Add</button>
+                </div>
+            </div>
+            <div class="flex gap-3 items-center border-t border-zinc-900 pt-4">
+                <button onclick="deleteCurrentTask()" class="text-red-500/50 hover:text-red-400 font-mono text-[9px] uppercase transition-colors mr-auto">[ Excluir ]</button>
+                <button onclick="closeTaskDetailModal()" class="border border-zinc-800 text-zinc-400 font-mono text-[9px] px-4 py-2 rounded uppercase hover:border-zinc-700 transition-colors">Cancelar</button>
+                <button onclick="saveTaskDetail()" class="bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-[9px] px-5 py-2 rounded uppercase transition-colors">Salvar</button>
             </div>
         </div>
     </div>
