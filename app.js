@@ -235,9 +235,15 @@ function switchView(viewId) {
 
     document.querySelectorAll('.app-view').forEach(view => {
         view.classList.add('hidden');
+        view.style.display = 'none';
     });
     const activeView = document.getElementById(`view-${viewId}`);
-    if (activeView) activeView.classList.remove('hidden');
+    if (activeView) {
+        activeView.classList.remove('hidden');
+        activeView.style.display = 'block';
+    }
+    const mainEl = document.querySelector('main');
+    if (mainEl) mainEl.scrollTop = 0;
 
     // Update active class on sidebar navigation links to keep them in sync
     document.querySelectorAll('.sidebar-link').forEach(link => {
