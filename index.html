@@ -21,24 +21,9 @@
 
 <body class="bg-[#040711] text-zinc-100 min-h-screen dotted-grid selection:bg-cyan-500/30 selection:text-white pb-12">
 
-    <!-- SIMULATOR CONTROLLER (DEBUG BAR) -->
-    <div class="debug-bar fixed top-0 left-0 w-full h-[54px] px-6 flex items-center justify-between z-50">
-        <div class="flex items-center gap-3">
-            <span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
-            <span class="font-mono text-[10px] text-amber-500 tracking-widest uppercase font-bold">
-                SIMULADOR DE SISTEMA // PERMISSÕES ATIVAS
-            </span>
-        </div>
+    <!-- TOP BAR -->
+    <div class="debug-bar fixed top-0 left-0 w-full h-[54px] px-6 flex items-center justify-end z-50">
         <div class="flex items-center gap-4">
-            <div class="flex items-center gap-2">
-                <label for="debug-user-select" class="font-mono text-[9px] text-zinc-500 uppercase">Usuário de
-                    Simulação:</label>
-                <select id="debug-user-select"
-                    onchange="const u = db.users.find(x => x.id === parseInt(this.value)); selectDebugRole(u.role, u.id);"
-                    class="bg-zinc-950 text-zinc-300 border border-zinc-800 rounded px-3 py-1 font-mono text-xs focus:outline-none focus:border-amber-500/50">
-                    <!-- Populated dynamically -->
-                </select>
-            </div>
             <button onclick="toggleTheme()"
                 class="bg-zinc-950 text-zinc-300 border border-zinc-800 rounded px-3 py-1 font-mono text-xs hover:border-amber-500/50 flex items-center gap-1.5 transition-colors">
                 <span id="theme-toggle-icon">☀️ Modo Claro</span>
@@ -647,91 +632,32 @@
                     </div>
                 </div>
 
-            <!-- Seção 2: Integração com a Nuvem (Supabase) -->
-            <div class="glass-card p-6 space-y-6 mt-8">
-                <div
-                    class="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-zinc-900 pb-3">
-                    <div>
-                        <span class="font-mono text-[9px] text-zinc-400 uppercase tracking-wider block">[ INTEGRAÇÃO COM
-                            A NUVEM ]</span>
-                        <h3 class="text-white font-bold text-base mt-1 font-sans">Banco de Dados Online (Supabase)</h3>
-                    </div>
-                    <div id="cloud-status-badge"
-                        class="w-fit px-2.5 py-1 rounded text-[10px] font-mono font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 uppercase tracking-wider">
-                        Modo Local (Offline)
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                    <!-- Formulário de Chaves -->
-                    <div class="lg:col-span-7 space-y-4">
-                        <p class="text-zinc-400 text-xs font-sans">
-                            Conecte a plataforma Strivo a uma instância na nuvem do Supabase. Com o modo nuvem ativado,
-                            os dados comerciais serão sincronizados de forma permanente e as regras de comissionamento
-                            serão calculadas e validadas no lado do servidor.
-                        </p>
-
-                        <form id="supabase-config-form" onsubmit="saveSupabaseConfig(event)" class="space-y-4 text-xs">
-                            <div class="space-y-1">
-                                <label for="supa-url" class="text-zinc-400 font-semibold">Supabase Project URL:</label>
-                                <input type="url" id="supa-url" placeholder="https://xxxxxxxxxxxxxx.supabase.co"
-                                    class="w-full bg-slate-900 border border-zinc-800 rounded p-2.5 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500 transition-colors">
-                            </div>
-                            <div class="space-y-1">
-                                <label for="supa-anon-key" class="text-zinc-400 font-semibold">Supabase Anon Public
-                                    Key:</label>
-                                <input type="password" id="supa-anon-key" placeholder="eyJhbGciOi..."
-                                    class="w-full bg-slate-900 border border-zinc-800 rounded p-2.5 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500 transition-colors">
-                            </div>
-                            <div class="flex gap-3 pt-2">
-                                <button type="submit"
-                                    class="bg-cyan-500 hover:bg-cyan-400 text-black font-bold px-5 py-2.5 rounded font-mono text-xs tracking-wider uppercase transition-colors">
-                                    Salvar e Conectar
-                                </button>
-                                <button type="button" onclick="disconnectSupabase()" id="btn-disconnect-supa"
-                                    class="hidden border border-rose-500/30 hover:bg-rose-950/20 text-rose-400 font-semibold px-4 py-2.5 rounded font-sans text-xs uppercase transition-colors">
-                                    Desconectar Nuvem
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-
-                    <!-- Painel de Migração -->
-                    <div class="lg:col-span-5 p-5 bg-slate-950/40 border border-zinc-900 rounded-lg space-y-4">
-                        <span class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider block">// SINCRONISMO
-                            INICIAL</span>
-                        <h4 class="text-zinc-200 text-xs font-bold font-sans">Migrar Base de Dados Local</h4>
-                        <p class="text-zinc-500 text-[11px] font-sans leading-relaxed">
-                            Se você acabou de criar o banco de dados Supabase e rodou o script SQL, utilize a função
-                            abaixo para enviar todos os dados locais atuais (usuários, fundos, leads, clientes
-                            cadastrados e faturamentos) diretamente para a nuvem.
-                        </p>
-
-                        <button id="btn-migrate-data" onclick="migrateLocalDataToSupabase()" disabled
-                            class="w-full bg-slate-800 cursor-not-allowed text-zinc-500 font-bold py-2.5 rounded font-mono text-xs tracking-wider uppercase transition-colors flex justify-center items-center gap-2">
-                            📤 Enviar Dados Locais para Nuvem
-                        </button>
-                        <div id="migration-progress-msg" class="hidden text-zinc-400 font-mono text-[9px] text-center">
-                        </div>
-                    </div>
-                </div>
+            <!-- ================= /view-settings ================= -->
             </div>
 
             <!-- ================= view-agenda ================= -->
             <div id="view-agenda" class="app-view hidden" style="padding-top:1px;">
-                <div class="mb-6">
-                    <h2 class="text-2xl font-extrabold tracking-tight text-white font-sans">Agenda</h2>
-                    <p class="text-zinc-500 text-xs mt-1 font-mono">Próximos passos e tarefas de todos os leads</p>
+                <div class="mb-6 flex items-center justify-between flex-wrap gap-3">
+                    <div>
+                        <h2 class="text-2xl font-extrabold tracking-tight text-white font-sans">Agenda</h2>
+                        <p class="text-zinc-500 text-xs mt-1 font-mono">Próximos passos e tarefas de todos os leads</p>
+                    </div>
+                    <div class="flex items-center gap-1.5 bg-slate-900 border border-zinc-800 rounded-lg p-1">
+                        <button type="button" id="agenda-view-week-btn" onclick="setAgendaViewMode('week')"
+                            class="font-mono text-[10px] uppercase tracking-wider px-3 py-1.5 rounded transition-colors">Semana</button>
+                        <button type="button" id="agenda-view-month-btn" onclick="setAgendaViewMode('month')"
+                            class="font-mono text-[10px] uppercase tracking-wider px-3 py-1.5 rounded transition-colors">Mês</button>
+                    </div>
                 </div>
                 <div id="agenda-week-strip" class="flex gap-2 overflow-x-auto pb-2 mb-6" style="min-height:60px">
                     <span class="text-[10px] font-mono text-zinc-500">Carregando...</span>
                 </div>
+                <div id="agenda-month-calendar" class="hidden mb-6"></div>
+                <div id="agenda-selected-filter-bar" class="hidden mb-3"></div>
                 <div id="agenda-task-groups" style="min-height:80px">
                     <span class="text-[10px] font-mono text-zinc-500">Carregando tarefas...</span>
                 </div>
             </div>
-
-    </div>
 
     </main>
     </div>
@@ -869,7 +795,7 @@
                                 </select>
                             </div>
                             <button type="button" onclick="addCurrentLeadTask()"
-                                class="w-full bg-zinc-850 hover:bg-zinc-800 border border-zinc-850 text-zinc-300 font-mono text-[10px] px-3 py-1.5 rounded transition-colors uppercase font-bold">
+                                class="w-full bg-slate-900 hover:bg-zinc-800 border border-zinc-850 text-zinc-300 font-mono text-[10px] px-3 py-1.5 rounded transition-colors uppercase font-bold">
                                 + Agendar Tarefa
                             </button>
                         </div>
@@ -893,7 +819,7 @@
                                 <input type="file" id="new-attachment-file" onchange="uploadCurrentLeadFile(this)"
                                     class="hidden">
                                 <label for="new-attachment-file"
-                                    class="w-full bg-zinc-900 border border-dashed border-zinc-800 hover:border-cyan-500/30 rounded p-2 text-center text-zinc-400 hover:text-cyan-400 font-mono text-[10px] cursor-pointer transition-colors block uppercase">
+                                    class="w-full bg-slate-900 border border-dashed border-zinc-800 hover:border-cyan-500/30 rounded p-2 text-center text-zinc-400 hover:text-cyan-400 font-mono text-[10px] cursor-pointer transition-colors block uppercase">
                                     Escolher Arquivo...
                                 </label>
                             </div>
@@ -919,12 +845,12 @@
                 <span>📁</span><span id="tdm-lead-name">—</span>
             </div>
             <div class="grid grid-cols-2 gap-3">
-                <div class="bg-slate-950/60 border border-zinc-900 rounded-lg p-3 space-y-1.5">
+                <div class="bg-slate-950/40 border border-zinc-900 rounded-lg p-3 space-y-1.5">
                     <div class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">Vencimento</div>
                     <input id="tdm-due-date" type="date" class="bg-transparent text-zinc-200 text-xs font-mono focus:outline-none w-full">
                     <input id="tdm-due-time" type="time" class="bg-transparent text-zinc-400 text-[10px] font-mono focus:outline-none w-full">
                 </div>
-                <div class="bg-slate-950/60 border border-zinc-900 rounded-lg p-3 space-y-1.5">
+                <div class="bg-slate-950/40 border border-zinc-900 rounded-lg p-3 space-y-1.5">
                     <div class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">Prioridade</div>
                     <div class="flex gap-1 mt-1" id="tdm-priority-pills">
                         <button onclick="setTaskPriority(1)" data-p="1" class="tdm-priority-pill px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border border-red-800/60 text-red-400">P1</button>
@@ -945,7 +871,7 @@
             <div class="space-y-2">
                 <div class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">Descrição</div>
                 <textarea id="tdm-description" rows="2" placeholder="Adicionar descrição..."
-                    class="w-full bg-slate-950/60 border border-zinc-900 rounded-lg p-3 text-zinc-300 text-xs focus:outline-none focus:border-cyan-800/50 resize-none transition-colors"></textarea>
+                    class="w-full bg-slate-950/40 border border-zinc-900 rounded-lg p-3 text-zinc-300 text-xs focus:outline-none focus:border-cyan-800/50 resize-none transition-colors"></textarea>
             </div>
             <div class="space-y-2">
                 <div class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider flex items-center justify-between">
@@ -957,7 +883,7 @@
                     <input id="tdm-new-subtask" type="text" placeholder="+ Adicionar subtarefa"
                         class="flex-1 bg-slate-950/40 border border-zinc-900 rounded p-2 text-zinc-300 text-xs focus:outline-none focus:border-cyan-800/50 transition-colors"
                         onkeydown="if(event.key==='Enter'){addSubtask()}">
-                    <button onclick="addSubtask()" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-mono text-[9px] px-2 py-1 rounded uppercase transition-colors">Add</button>
+                    <button onclick="addSubtask()" class="bg-slate-900 hover:bg-zinc-700 text-zinc-300 font-mono text-[9px] px-2 py-1 rounded uppercase transition-colors">Add</button>
                 </div>
             </div>
             <div class="flex gap-3 items-center border-t border-zinc-900 pt-4">
@@ -1037,6 +963,7 @@
                     <label for="user-modal-role" class="text-zinc-400 font-semibold">Nível / Cargo Comercial:</label>
                     <select id="user-modal-role"
                         class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 focus:outline-none focus:border-cyan-500">
+                        <option value="admin">Admin</option>
                         <option value="diretoria">Diretoria</option>
                         <option value="lideranca">Liderança Comercial (Nível 2)</option>
                         <option value="agente">Agente Comercial (Nível 3)</option>

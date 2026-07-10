@@ -18,93 +18,30 @@ async function initApp() {
     // 1. Initial Local Load (so that if Supabase is disconnected, we still have local data)
     db = loadDataStore();
     
-    // Check Supabase Configuration (defaults point to VPS production)
-    const DEFAULT_SUPA_URL = 'https://api.strivoeduca.com.br';
-    const DEFAULT_SUPA_KEY = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc4MjQ5OTM4MCwiZXhwIjo0OTM4MTcyOTgwLCJyb2xlIjoiYW5vbiJ9.-sh4lSBcEP2wR8CDarOeiUuRlDe50kvA4RDAoCkOtTg';
+    // Configuração do Supabase (instância dedicada do CRM, isolada do Portal do
+    // Investidor). Fixa no código por design: o app não permite apontar para
+    // outro backend em tempo de execução (correção de segurança intencional).
+    const DEFAULT_SUPA_URL = 'https://api-crm.strivoeduca.com.br';
+    const DEFAULT_SUPA_KEY = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc4MzE2NjU4MCwiZXhwIjo0OTM4ODQwMTgwLCJyb2xlIjoiYW5vbiJ9.GDoJYz5NYpnrGjvUSsXL-Kncabf1n8uIWNB56gRm7vk';
 
-    let supaUrl = localStorage.getItem('strivo_supabase_url') || DEFAULT_SUPA_URL;
-    let supaKey = localStorage.getItem('strivo_supabase_key') || DEFAULT_SUPA_KEY;
-
-    if (supaUrl) {
-        supaUrl = supaUrl.trim().replace(/\/$/, "").replace(/\/rest\/v1\/?$/, "");
-        localStorage.setItem('strivo_supabase_url', supaUrl);
-    }
-    if (supaKey) {
-        supaKey = supaKey.trim();
-        localStorage.setItem('strivo_supabase_key', supaKey);
-    }
-    
-    const cloudStatusBadge = document.getElementById('cloud-status-badge');
-    const btnMigrate = document.getElementById('btn-migrate-data');
-    const btnDisconnect = document.getElementById('btn-disconnect-supa');
-    
-    // Set config values in settings panel inputs if they exist
-    const supaUrlInput = document.getElementById('supa-url');
-    const supaKeyInput = document.getElementById('supa-anon-key');
-    if (supaUrlInput && supaUrl) supaUrlInput.value = supaUrl;
-    if (supaKeyInput && supaKey) supaKeyInput.value = supaKey;
-
-    if (supaUrl && supaKey && window.supabase) {
+    if (DEFAULT_SUPA_URL && DEFAULT_SUPA_KEY && window.supabase) {
         try {
-            const loggedUserId = sessionStorage.getItem('strivo_logged_user_id');
-            const options = {};
-            if (loggedUserId) {
-                options.global = {
-                    headers: {
-                        'Accept-Language': loggedUserId.toString()
-                    }
-                };
-            }
-            supabaseClient = window.supabase.createClient(supaUrl, supaKey, options);
+            supabaseClient = window.supabase.createClient(DEFAULT_SUPA_URL, DEFAULT_SUPA_KEY);
             supabaseMode = 'CLOUD';
-            
-            if (cloudStatusBadge) {
-                cloudStatusBadge.innerText = 'Modo Nuvem (Online)';
-                cloudStatusBadge.className = 'w-fit px-2.5 py-1 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-450 border border-emerald-500/20 uppercase tracking-wider';
-            }
-            if (btnMigrate) {
-                btnMigrate.disabled = false;
-                btnMigrate.classList.remove('bg-slate-800', 'cursor-not-allowed', 'text-zinc-500');
-                btnMigrate.classList.add('bg-zinc-800', 'hover:bg-zinc-700', 'text-zinc-300');
-            }
-            if (btnDisconnect) btnDisconnect.classList.remove('hidden');
-            
-            // Load from cloud into global db in memory
-            await loadDataStoreFromCloud();
         } catch (err) {
             console.error("Erro de conexão ao Supabase. Revertendo para local:", err);
             supabaseMode = 'LOCAL';
             db = loadDataStore();
-            
-            // Reset status badge and migration button to show offline state
-            if (cloudStatusBadge) {
-                cloudStatusBadge.innerText = 'Erro de Conexão (Offline)';
-                cloudStatusBadge.className = 'w-fit px-2.5 py-1 rounded text-[10px] font-mono font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 uppercase tracking-wider';
-            }
-            if (btnMigrate) {
-                btnMigrate.disabled = true;
-                btnMigrate.classList.add('bg-slate-800', 'cursor-not-allowed', 'text-zinc-500');
-                btnMigrate.classList.remove('bg-zinc-800', 'hover:bg-zinc-700', 'text-zinc-300');
-            }
-            if (btnDisconnect) btnDisconnect.classList.add('hidden');
         }
     } else {
         supabaseMode = 'LOCAL';
         db = loadDataStore();
-        if (cloudStatusBadge) {
-            cloudStatusBadge.innerText = 'Modo Local (Offline)';
-            cloudStatusBadge.className = 'w-fit px-2.5 py-1 rounded text-[10px] font-mono font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 uppercase tracking-wider';
-        }
-        if (btnMigrate) {
-            btnMigrate.disabled = true;
-            btnMigrate.classList.add('bg-slate-800', 'cursor-not-allowed', 'text-zinc-500');
-            btnMigrate.classList.remove('bg-zinc-800', 'hover:bg-zinc-700', 'text-zinc-300');
-        }
-        if (btnDisconnect) btnDisconnect.classList.add('hidden');
     }
 
-    // Initialize standard stages if not present in db
-    if (!db.stages || db.stages.length === 0) {
+    // Initialize standard stages if not present in db (só faz sentido em modo
+    // local; em modo nuvem isso só pode ser decidido depois de autenticar,
+    // então esse mesmo check é repetido dentro do bloco de sessão abaixo)
+    if (supabaseMode === 'LOCAL' && (!db.stages || db.stages.length === 0)) {
         db.stages = [
             { key: 'prospect', label: 'Prospect', order: 1, colorClass: 'badge-blue' },
             { key: 'contato', label: 'Contato', order: 2, colorClass: 'badge-purple' },
@@ -113,7 +50,7 @@ async function initApp() {
         ];
         await saveDataStore(db);
     }
-    
+
     // Theme initialization: default to 'light' since requested by user
     const theme = localStorage.getItem('strivo_theme') || 'light';
     if (theme === 'light') {
@@ -126,21 +63,51 @@ async function initApp() {
         if (icon) icon.innerText = '☀️ Modo Claro';
     }
 
-    // CHECK SESSION
-    const loggedUserId = sessionStorage.getItem('strivo_logged_user_id');
-    if (!loggedUserId) {
-        showLoginScreen();
-        return;
-    }
+    // CHECK SESSION (Supabase Auth real em modo nuvem; fallback local caso contrário)
+    if (supabaseMode === 'CLOUD' && supabaseClient) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (!session) {
+            showLoginScreen();
+            return;
+        }
 
-    currentUserId = parseInt(loggedUserId);
-    const loggedUser = db.users.find(u => u.id === currentUserId);
-    if (!loggedUser) {
-        sessionStorage.removeItem('strivo_logged_user_id');
-        showLoginScreen();
-        return;
+        // Só busca os dados da nuvem depois de confirmar sessão real —
+        // antes disso o RLS não devolveria nada mesmo (por design).
+        await loadDataStoreFromCloud();
+
+        if (!db.stages || db.stages.length === 0) {
+            db.stages = [
+                { key: 'prospect', label: 'Prospect', order: 1, colorClass: 'badge-blue' },
+                { key: 'contato', label: 'Contato', order: 2, colorClass: 'badge-purple' },
+                { key: 'proposta', label: 'Proposta', order: 3, colorClass: 'badge-amber' },
+                { key: 'fechado', label: 'Fechado', order: 4, colorClass: 'badge-emerald' }
+            ];
+            await saveDataStore(db);
+        }
+
+        const loggedUser = db.users.find(u => u.auth_user_id === session.user.id);
+        if (!loggedUser) {
+            await supabaseClient.auth.signOut();
+            showLoginScreen();
+            return;
+        }
+        currentUserId = loggedUser.id;
+        currentRole = loggedUser.role;
+    } else {
+        const loggedUserId = sessionStorage.getItem('strivo_logged_user_id');
+        if (!loggedUserId) {
+            showLoginScreen();
+            return;
+        }
+        currentUserId = parseInt(loggedUserId);
+        const loggedUser = db.users.find(u => u.id === currentUserId);
+        if (!loggedUser) {
+            sessionStorage.removeItem('strivo_logged_user_id');
+            showLoginScreen();
+            return;
+        }
+        currentRole = loggedUser.role;
     }
-    currentRole = loggedUser.role;
 
     hideLoginScreen();
     setupEventListeners();
@@ -151,8 +118,6 @@ async function initApp() {
     renderFinancial();
     renderApprovals();
     renderPartnerships();
-    populateSelects();
-    updateDebugInfo();
 }
 
 // Sidebar Navigation
@@ -161,7 +126,8 @@ function renderSidebar() {
     const container = document.getElementById('sidebar-user-info');
     if (container && user) {
         let roleBadge = `<span class="px-2 py-0.5 rounded text-[9px] font-mono `;
-        if (user.role === 'diretoria') roleBadge += 'badge-diretoria">Diretoria';
+        if (user.role === 'admin') roleBadge += 'badge-admin">Admin';
+        else if (user.role === 'diretoria') roleBadge += 'badge-diretoria">Diretoria';
         else if (user.role === 'lideranca') roleBadge += 'badge-lideranca">Liderança';
         else roleBadge += 'badge-agente">Agente Comercial';
         roleBadge += '</span>';
@@ -177,7 +143,7 @@ function renderSidebar() {
         // Toggle Ajustes Funil (Settings) visibility based on role
         const settingsLink = document.getElementById('sidebar-link-settings');
         if (settingsLink) {
-            if (user.role === 'diretoria') {
+            if (user.role === 'diretoria' || user.role === 'admin') {
                 settingsLink.classList.remove('hidden');
             } else {
                 settingsLink.classList.add('hidden');
@@ -227,7 +193,7 @@ function setupEventListeners() {
 }
 
 function switchView(viewId) {
-    if (viewId === 'settings' && currentRole !== 'diretoria') {
+    if (viewId === 'settings' && currentRole !== 'diretoria' && currentRole !== 'admin') {
         alert("Acesso restrito à Diretoria Comercial.");
         switchView('dashboard');
         return;
@@ -267,36 +233,6 @@ function switchView(viewId) {
     else if (viewId === 'agenda') renderAgendaView();
 }
 
-// Debug Switcher Lógica
-function selectDebugRole(role, userId) {
-    currentRole = role;
-    currentUserId = parseInt(userId);
-    sessionStorage.setItem('strivo_logged_user_id', userId);
-    renderSidebar();
-    
-    // Switch active view to crm to show filtered data
-    document.querySelectorAll('.sidebar-link').forEach(l => {
-        l.classList.remove('active');
-        if (l.getAttribute('data-target') === 'crm') l.classList.add('active');
-    });
-    switchView('crm');
-    
-    renderCRM();
-    renderFinancial();
-    renderApprovals();
-    renderPartnerships();
-    updateDebugInfo();
-    
-    logSystem(`Sessão chaveada para papel: ${role.toUpperCase()} (ID: ${userId})`);
-}
-
-function updateDebugInfo() {
-    const debugSelect = document.getElementById('debug-user-select');
-    if (debugSelect) {
-        debugSelect.value = currentUserId;
-    }
-}
-
 // ----------------- FILTERS & HIERARCHY RULES -----------------
 function getSubordinateUserIds(userId) {
     const subs = [];
@@ -311,7 +247,7 @@ function getSubordinateUserIds(userId) {
 }
 
 function getVisibleUserIds() {
-    if (currentRole === 'diretoria') {
+    if (currentRole === 'diretoria' || currentRole === 'admin') {
         return db.users.map(u => u.id);
     } else if (currentRole === 'lideranca') {
         return [currentUserId, ...getSubordinateUserIds(currentUserId)];
@@ -323,7 +259,7 @@ function getVisibleUserIds() {
 // ----------------- MÓDULO 05: DASHBOARD & RELATÓRIOS -----------------
 function renderDashboard() {
     const visibleUserIds = getVisibleUserIds();
-    const isDir = currentRole === 'diretoria';
+    const isDir = currentRole === 'diretoria' || currentRole === 'admin';
     const isLid = currentRole === 'lideranca';
 
     // Calculate metrics
@@ -506,7 +442,7 @@ function renderRecentTransactions(visibleUserIds) {
         const agenteShare = fat.value * (product.splitAgente / 100);
         const strivoShare = fat.value * (product.splitStrivo / 100);
 
-        if (currentRole === 'diretoria') payout = strivoShare;
+        if (currentRole === 'diretoria' || currentRole === 'admin') payout = strivoShare;
         else if (currentRole === 'lideranca') {
             if (client.leaderId === currentUserId) payout += liderShare;
             if (client.agentId === currentUserId) payout += agenteShare;
@@ -537,7 +473,7 @@ function renderRecentTransactions(visibleUserIds) {
         const agenteShare = feeValue * (product.splitAgente / 100);
         const strivoShare = feeValue * (product.splitStrivo / 100);
 
-        if (currentRole === 'diretoria') payout = strivoShare;
+        if (currentRole === 'diretoria' || currentRole === 'admin') payout = strivoShare;
         else if (currentRole === 'lideranca') {
             if (ap.leaderId === currentUserId) payout += liderShare;
             if (ap.agentId === currentUserId) payout += agenteShare;
@@ -723,6 +659,19 @@ function renderCRM() {
 
                     card.addEventListener('dragstart', (e) => {
                         e.dataTransfer.setData('text/plain', lead.id);
+                    });
+
+                    // Nota: usamos detecção manual de duplo clique (em vez do evento
+                    // nativo 'dblclick') porque elementos com draggable="true" não
+                    // disparam 'dblclick' de forma confiável no Chrome/Edge — o
+                    // segundo mousedown é interpretado como início de um arraste.
+                    let lastCardClickTime = 0;
+                    card.addEventListener('click', () => {
+                        const now = Date.now();
+                        if (now - lastCardClickTime < 400) {
+                            openLeadModal(lead.id);
+                        }
+                        lastCardClickTime = now;
                     });
 
                     // Split text configuration
@@ -1189,6 +1138,8 @@ function toggleLeadTask(leadId, taskId) {
     logSystem(`Tarefa "${task.text}" no lead "${lead.name}" marcada como ${task.completed ? 'CONCLUÍDA' : 'PENDENTE'}`);
     renderLeadTasks(leadId);
     renderCRM();
+    const agendaView = document.getElementById('view-agenda');
+    if (agendaView && !agendaView.classList.contains('hidden')) renderAgendaView();
 }
 
 function deleteLeadTask(leadId, taskId) {
@@ -1336,15 +1287,76 @@ function deleteCurrentTask() {
 }
 
 // Agenda View
+let _agendaViewMode = 'week'; // 'week' | 'month'
+let _agendaSelectedDate = null; // 'YYYY-MM-DD' ou null (sem filtro)
+let _agendaCalendarRef = new Date(); // mes/ano exibido na visao de mes
+
 function renderAgendaView() {
     try {
-        _renderAgendaWeekStrip();
+        _updateAgendaViewToggleUI();
+        if (_agendaViewMode === 'month') {
+            _renderAgendaMonthCalendar();
+        } else {
+            _renderAgendaWeekStrip();
+        }
+        _renderAgendaSelectedFilterBar();
         _renderAgendaGroups();
     } catch (err) {
         console.error('[Agenda] renderAgendaView error:', err);
         const c = document.getElementById('agenda-task-groups');
         if (c) c.innerHTML = `<div class="py-8 text-center font-mono text-xs text-red-400">Erro ao carregar agenda: ${err.message}</div>`;
     }
+}
+
+function setAgendaViewMode(mode) {
+    _agendaViewMode = mode;
+    const weekStrip = document.getElementById('agenda-week-strip');
+    const monthCal = document.getElementById('agenda-month-calendar');
+    if (mode === 'month') {
+        if (weekStrip) weekStrip.classList.add('hidden');
+        if (monthCal) monthCal.classList.remove('hidden');
+    } else {
+        if (weekStrip) weekStrip.classList.remove('hidden');
+        if (monthCal) monthCal.classList.add('hidden');
+    }
+    renderAgendaView();
+}
+
+function _updateAgendaViewToggleUI() {
+    const weekBtn = document.getElementById('agenda-view-week-btn');
+    const monthBtn = document.getElementById('agenda-view-month-btn');
+    if (!weekBtn || !monthBtn) return;
+    const activeClasses = ['bg-cyan-500', 'text-black'];
+    const inactiveClasses = ['text-zinc-400', 'hover:text-zinc-200'];
+    weekBtn.classList.remove(...activeClasses, ...inactiveClasses);
+    monthBtn.classList.remove(...activeClasses, ...inactiveClasses);
+    weekBtn.classList.add(..._agendaViewMode === 'week' ? activeClasses : inactiveClasses);
+    monthBtn.classList.add(..._agendaViewMode === 'month' ? activeClasses : inactiveClasses);
+}
+
+function _selectAgendaDate(dateStr) {
+    _agendaSelectedDate = (_agendaSelectedDate === dateStr) ? null : dateStr;
+    renderAgendaView();
+}
+
+function _shiftAgendaMonth(delta) {
+    _agendaCalendarRef = new Date(_agendaCalendarRef.getFullYear(), _agendaCalendarRef.getMonth() + delta, 1);
+    renderAgendaView();
+}
+
+function _renderAgendaSelectedFilterBar() {
+    const bar = document.getElementById('agenda-selected-filter-bar');
+    if (!bar) return;
+    if (!_agendaSelectedDate) {
+        bar.classList.add('hidden');
+        bar.innerHTML = '';
+        return;
+    }
+    bar.classList.remove('hidden');
+    bar.innerHTML = `<div class="flex items-center justify-between bg-cyan-500/10 border border-cyan-500/30 rounded-lg px-3 py-2">
+        <span class="font-mono text-xs text-cyan-300">Mostrando somente: ${_fmtAgendaDate(_agendaSelectedDate)}</span>
+        <button type="button" onclick="_selectAgendaDate('${_agendaSelectedDate}')" class="font-mono text-[10px] uppercase tracking-wider text-zinc-400 hover:text-white transition-colors">Ver tudo ✕</button>
+    </div>`;
 }
 
 function _renderAgendaWeekStrip() {
@@ -1358,13 +1370,59 @@ function _renderAgendaWeekStrip() {
     container.innerHTML = days.map(d => {
         const ds = d.toISOString().split('T')[0];
         const isToday = ds === todayStr;
+        const isSelected = ds === _agendaSelectedDate;
         const hasTasks = allTasks.includes(ds);
-        return `<div class="flex flex-col items-center flex-shrink-0 w-10 gap-0.5">
+        let circleClass = isToday ? 'bg-rose-500 text-white' : 'bg-slate-900 border border-zinc-800 text-zinc-400';
+        if (isSelected) circleClass += ' ring-2 ring-cyan-400';
+        return `<div class="flex flex-col items-center flex-shrink-0 w-10 gap-0.5 cursor-pointer" onclick="_selectAgendaDate('${ds}')">
             <span class="text-[9px] font-mono text-zinc-600">${dayNames[d.getDay()]}</span>
-            <div class="${isToday ? 'bg-rose-500 text-white' : 'bg-slate-900 border border-zinc-800 text-zinc-400'} w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold">${d.getDate()}</div>
+            <div class="${circleClass} w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors">${d.getDate()}</div>
             <div class="w-1.5 h-1.5 rounded-full ${hasTasks ? 'bg-cyan-500' : 'bg-transparent'}"></div>
         </div>`;
     }).join('');
+}
+
+function _renderAgendaMonthCalendar() {
+    const container = document.getElementById('agenda-month-calendar');
+    if (!container) return;
+    const year = _agendaCalendarRef.getFullYear();
+    const month = _agendaCalendarRef.getMonth();
+    const todayStr = new Date().toISOString().split('T')[0];
+    const allTaskDates = db.leads.flatMap(l => (l.tasks || []).filter(t => !t.completed).map(t => t.dueDate));
+
+    const firstOfMonth = new Date(year, month, 1);
+    const startWeekday = firstOfMonth.getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    const dayNames = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+
+    let cells = '';
+    for (let i = 0; i < startWeekday; i++) cells += `<div></div>`;
+    for (let day = 1; day <= daysInMonth; day++) {
+        const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const isToday = ds === todayStr;
+        const isSelected = ds === _agendaSelectedDate;
+        const hasTasks = allTaskDates.includes(ds);
+        let cellClass = 'border border-zinc-800/60 hover:border-cyan-500/50';
+        if (isToday) cellClass += ' bg-rose-500/10 border-rose-500/40';
+        if (isSelected) cellClass += ' ring-2 ring-cyan-400';
+        cells += `<div class="${cellClass} rounded-lg p-1.5 h-16 flex flex-col cursor-pointer transition-colors" onclick="_selectAgendaDate('${ds}')">
+            <span class="text-[10px] font-mono ${isToday ? 'text-rose-400 font-bold' : 'text-zinc-400'}">${day}</span>
+            ${hasTasks ? `<span class="w-1.5 h-1.5 rounded-full bg-cyan-500 mt-auto"></span>` : ''}
+        </div>`;
+    }
+
+    container.innerHTML = `
+        <div class="flex items-center justify-between mb-3">
+            <button type="button" onclick="_shiftAgendaMonth(-1)" class="text-zinc-400 hover:text-white font-mono text-sm px-2 py-1 transition-colors">‹</button>
+            <span class="font-mono text-xs uppercase tracking-wider text-zinc-300">${monthNames[month]} ${year}</span>
+            <button type="button" onclick="_shiftAgendaMonth(1)" class="text-zinc-400 hover:text-white font-mono text-sm px-2 py-1 transition-colors">›</button>
+        </div>
+        <div class="grid grid-cols-7 gap-1.5 mb-1.5">
+            ${dayNames.map(n => `<div class="text-center text-[9px] font-mono text-zinc-600">${n}</div>`).join('')}
+        </div>
+        <div class="grid grid-cols-7 gap-1.5">${cells}</div>
+    `;
 }
 
 function _renderAgendaGroups() {
@@ -1374,7 +1432,15 @@ function _renderAgendaGroups() {
     const visibleIds = getVisibleUserIds();
     const allTasks = db.leads
         .filter(l => visibleIds.includes(l.agentId))
-        .flatMap(l => (l.tasks || []).filter(t => !t.completed).map(t => ({ ...t, leadId: l.id, leadName: l.name })));
+        .flatMap(l => (l.tasks || []).map(t => ({ ...t, leadId: l.id, leadName: l.name })));
+
+    if (_agendaSelectedDate) {
+        const dayTasks = allTasks.filter(t => t.dueDate === _agendaSelectedDate);
+        container.innerHTML = dayTasks.length
+            ? _agendaGroup(_fmtAgendaDate(_agendaSelectedDate), dayTasks, 'text-cyan-400')
+            : `<div class="py-16 text-center text-zinc-500 font-mono text-sm border border-zinc-800 rounded-xl">Nenhuma tarefa em ${_fmtAgendaDate(_agendaSelectedDate)}.</div>`;
+        return;
+    }
 
     const overdue = allTasks.filter(t => t.dueDate && t.dueDate < today);
     const todayTasks = allTasks.filter(t => t.dueDate === today);
@@ -1398,16 +1464,21 @@ function _agendaGroup(title, tasks, titleClass) {
         .sort((a, b) => (a.priority || 4) - (b.priority || 4))
         .map(task => {
             const pc = TASK_PRIORITY_CFG[task.priority || 4];
+            const doneClass = task.completed ? 'opacity-50' : '';
+            const textClass = task.completed ? 'line-through text-zinc-500' : 'text-zinc-200';
             const labelHtml = task.label
                 ? `<span class="px-1.5 py-0.5 rounded-full text-[8px] font-mono border ${task.label === 'urgente' ? 'border-red-800/60 text-red-400' : 'border-blue-800/60 text-blue-400'}">${task.label}</span>`
                 : '';
             const subtasks = task.subtasks || [];
             const subtaskHtml = subtasks.length ? `<span class="text-[8px] font-mono text-zinc-600">⊟ ${subtasks.filter(s=>s.completed).length}/${subtasks.length}</span>` : '';
-            return `<div class="flex items-start gap-3 py-3 border-b border-zinc-900/60 last:border-0 cursor-pointer hover:bg-white/[0.02] rounded px-2 -mx-2 transition-colors"
+            return `<div class="${doneClass} flex items-start gap-3 py-3 border-b border-zinc-900/60 last:border-0 cursor-pointer hover:bg-white/[0.02] rounded px-2 -mx-2 transition-colors"
                          onclick="openTaskDetailModal(${task.leadId}, ${task.id})">
-                <div class="w-4 h-4 rounded-full border-2 flex-shrink-0 mt-0.5" style="border-color:${pc.border}"></div>
+                <button type="button"
+                    onclick="event.stopPropagation(); toggleLeadTask(${task.leadId}, ${task.id})"
+                    class="w-4 h-4 rounded-full border-2 flex-shrink-0 mt-0.5 transition-colors"
+                    style="border-color:${pc.border}; background:${task.completed ? pc.bg : 'transparent'}"></button>
                 <div class="flex-1 min-w-0">
-                    <p class="text-sm text-zinc-200 font-medium truncate">${task.text}</p>
+                    <p class="text-sm font-medium truncate ${textClass}">${task.text}</p>
                     <div class="flex items-center gap-2 mt-0.5 flex-wrap">
                         <span class="text-[9px] font-mono text-zinc-600">${task.leadName}</span>
                         ${task.dueTime ? `<span class="text-[9px] font-mono text-zinc-500">${task.dueTime}</span>` : ''}
@@ -1418,7 +1489,7 @@ function _agendaGroup(title, tasks, titleClass) {
         }).join('');
     return `<div>
         <div class="font-mono text-[10px] uppercase tracking-wider ${titleClass} mb-3">${title}</div>
-        <div class="bg-[#0b1022] border border-zinc-900 rounded-xl px-4 py-1">${rows}</div>
+        <div class="bg-slate-900 border border-zinc-900 rounded-xl px-4 py-1">${rows}</div>
     </div>`;
 }
 
@@ -1687,12 +1758,12 @@ function renderApprovals() {
             statusBadge = `<span class="status-badge badge-amber">Aguardando Líder</span>`;
             if (currentRole === 'lideranca' && ap.leaderId === currentUserId) {
                 actionBtn = `<button onclick="approveAporte(${ap.id})" class="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold font-mono text-[9px] px-2.5 py-1 rounded transition-colors uppercase">Aprovar</button>`;
-            } else if (currentRole === 'diretoria') {
+            } else if (currentRole === 'diretoria' || currentRole === 'admin') {
                 actionBtn = `<button onclick="approveAporte(${ap.id})" class="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold font-mono text-[9px] px-2.5 py-1 rounded transition-colors uppercase">Aprovar (Líder)</button>`;
             }
         } else if (ap.status === 'aprovado_lider') {
             statusBadge = `<span class="status-badge badge-cyan">Homologação Pendente</span>`;
-            if (currentRole === 'diretoria') {
+            if (currentRole === 'diretoria' || currentRole === 'admin') {
                 actionBtn = `<button onclick="homologateAporte(${ap.id})" class="bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold font-mono text-[9px] px-2.5 py-1 rounded transition-colors uppercase">Homologar</button>`;
             }
         } else if (ap.status === 'homologado') {
@@ -1803,8 +1874,8 @@ function saveAporte(event) {
 
 // ----------------- MÓDULO 01: GESTÃO DE PARCERIAS (CRUD) -----------------
 function renderPartnerships() {
-    const isDir = currentRole === 'diretoria';
-    
+    const isDir = currentRole === 'diretoria' || currentRole === 'admin';
+
     // Render Users Table
     const userTbody = document.getElementById('users-table-body');
     if (userTbody) {
@@ -1812,7 +1883,8 @@ function renderPartnerships() {
         db.users.forEach(u => {
             const parent = u.parentId ? db.users.find(pu => pu.id === u.parentId) : null;
             let roleBadge = '';
-            if (u.role === 'diretoria') roleBadge = `<span class="px-1.5 py-0.5 rounded text-[8px] font-mono badge-diretoria">DIRETORIA</span>`;
+            if (u.role === 'admin') roleBadge = `<span class="px-1.5 py-0.5 rounded text-[8px] font-mono badge-admin">ADMIN</span>`;
+            else if (u.role === 'diretoria') roleBadge = `<span class="px-1.5 py-0.5 rounded text-[8px] font-mono badge-diretoria">DIRETORIA</span>`;
             else if (u.role === 'lideranca') roleBadge = `<span class="px-1.5 py-0.5 rounded text-[8px] font-mono badge-lideranca">LIDERANÇA</span>`;
             else roleBadge = `<span class="px-1.5 py-0.5 rounded text-[8px] font-mono badge-agente">AGENTE</span>`;
 
@@ -1861,7 +1933,7 @@ function renderPartnerships() {
 }
 
 function openUserModal() {
-    if (currentRole !== 'diretoria') {
+    if (currentRole !== 'diretoria' && currentRole !== 'admin') {
         alert("Apenas a Diretoria pode gerenciar usuários.");
         return;
     }
@@ -1933,17 +2005,19 @@ function saveUser(event) {
             status: "active"
         });
         logSystem(`Novo usuário cadastrado: ${name} (${role.toUpperCase()})`);
+        if (supabaseMode === 'CLOUD') {
+            alert("Perfil criado. Importante: essa pessoa ainda não consegue logar — o acesso real (Supabase Auth) precisa ser provisionado à parte. Peça pra criar o login dela.");
+        }
     }
 
     saveDataStore(db);
     closeUserModal();
-    populateSelects();
     renderPartnerships();
     renderSidebar();
 }
 
 function openProductModal() {
-    if (currentRole !== 'diretoria') {
+    if (currentRole !== 'diretoria' && currentRole !== 'admin') {
         alert("Apenas a Diretoria pode gerenciar produtos.");
         return;
     }
@@ -2031,13 +2105,6 @@ function saveProduct(event) {
     renderPartnerships();
 }
 
-function populateSelects() {
-    const debugSelect = document.getElementById('debug-user-select');
-    if (debugSelect) {
-        debugSelect.innerHTML = db.users.map(u => `<option value="${u.id}">${u.name} (${u.role.toUpperCase()})</option>`).join('');
-    }
-}
-
 // ----------------- UTILITIES -----------------
 function formatCurrency(val) {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -2060,8 +2127,11 @@ function logSystem(message) {
         message: message,
         date: timeStr
     });
-    saveDataStore(db);
-    
+    // Log não é uma tabela sincronizada com a nuvem (é só localStorage) — não
+    // precisa (e não deve) disparar o saveDataStore completo das 7 tabelas
+    // a cada mensagem de log, isso re-enviava tudo à toa em todo login/ação.
+    localStorage.setItem('strivo_datastore', JSON.stringify(db));
+
     // Render system log in UI if exists
     const logsContainer = document.getElementById('sys-logs-content');
     if (logsContainer) {
@@ -2329,7 +2399,7 @@ function renderPipeline() {
         usersBody.innerHTML = '';
         
         // Filter users based on visible user IDs
-        const visibleUsers = db.users.filter(u => visibleUserIds.includes(u.id) && (u.role === 'agente' || u.role === 'lideranca' || u.role === 'diretoria'));
+        const visibleUsers = db.users.filter(u => visibleUserIds.includes(u.id) && (u.role === 'agente' || u.role === 'lideranca' || u.role === 'diretoria' || u.role === 'admin'));
         
         // Active stage keys (excluding 'fechado')
         const activeStageKeys = stages.map(s => s.key).filter(k => k !== 'fechado');
@@ -2365,7 +2435,8 @@ function renderPipeline() {
                 const percentage = totalActivePipelineValue > 0 ? (data.pipelineValue / totalActivePipelineValue * 100).toFixed(1) : '0.0';
                 
                 let roleBadge = '';
-                if (data.role === 'diretoria') roleBadge = '<span class="text-[8px] px-1 py-0.2 bg-red-950/40 text-red-400 border border-red-900/40 rounded ml-1 font-mono uppercase">Dir</span>';
+                if (data.role === 'admin') roleBadge = '<span class="text-[8px] px-1 py-0.2 bg-violet-950/40 text-violet-400 border border-violet-900/40 rounded ml-1 font-mono uppercase">Adm</span>';
+                else if (data.role === 'diretoria') roleBadge = '<span class="text-[8px] px-1 py-0.2 bg-red-950/40 text-red-400 border border-red-900/40 rounded ml-1 font-mono uppercase">Dir</span>';
                 else if (data.role === 'lideranca') roleBadge = '<span class="text-[8px] px-1 py-0.2 bg-purple-950/40 text-purple-400 border border-purple-900/40 rounded ml-1 font-mono uppercase">Líd</span>';
                 else roleBadge = '<span class="text-[8px] px-1 py-0.2 bg-blue-950/40 text-blue-400 border border-blue-900/40 rounded ml-1 font-mono uppercase">Com</span>';
 
@@ -2448,7 +2519,6 @@ function toggleTheme() {
 }
 
 // Global Exports for DOM actions
-window.selectDebugRole = selectDebugRole;
 window.approveAporte = approveAporte;
 window.homologateAporte = homologateAporte;
 window.openLeadModal = openLeadModal;
@@ -2513,13 +2583,41 @@ function hideLoginScreen() {
     if (debugBar) debugBar.classList.remove('hidden');
 }
 
-function attemptLogin(event) {
+async function attemptLogin(event) {
     if (event) event.preventDefault();
     
     const usernameInput = document.getElementById('login-username').value.trim().toLowerCase();
     const passwordInput = document.getElementById('login-password').value.trim();
     const errorMsg = document.getElementById('login-error-msg');
     const loginCard = document.querySelector('.login-card');
+    function showLoginError() {
+        errorMsg.classList.remove('hidden');
+        if (loginCard) {
+            loginCard.classList.add('shake-card');
+            setTimeout(() => loginCard.classList.remove('shake-card'), 500);
+        }
+    }
+
+    if (supabaseMode === 'CLOUD' && supabaseClient) {
+        const rpcResult = await supabaseClient.rpc('resolve_login_email', { p_username: usernameInput });
+        if (rpcResult.error || !rpcResult.data) {
+            showLoginError();
+            return;
+        }
+
+        const authResult = await supabaseClient.auth.signInWithPassword({
+            email: rpcResult.data,
+            password: passwordInput
+        });
+        if (authResult.error) {
+            showLoginError();
+            return;
+        }
+
+        errorMsg.classList.add('hidden');
+        await initApp();
+        return;
+    }
 
     // Mapeamento especial para sem acentos e normalização simples
     const normalizedUsernameInput = usernameInput.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -2535,22 +2633,15 @@ function attemptLogin(event) {
         errorMsg.classList.add('hidden');
         initApp(); // Reinicializa com a nova sessão do usuário
     } else {
-        errorMsg.classList.remove('hidden');
-        
-        // Efeito Shake no card de login
-        if (loginCard) {
-            loginCard.classList.add('shake-card');
-            setTimeout(() => {
-                loginCard.classList.remove('shake-card');
-            }, 500);
-        }
+        showLoginError();
     }
 }
 
-function logoutUser(event) {
+async function logoutUser(event) {
     if (event) event.preventDefault();
     if (confirm("Deseja realmente sair da conta comercial?")) {
         sessionStorage.removeItem('strivo_logged_user_id');
+        if (supabaseClient) await supabaseClient.auth.signOut();
         showLoginScreen();
     }
 }
@@ -2626,95 +2717,6 @@ async function loadDataStoreFromCloud() {
     }
 }
 
-function saveSupabaseConfig(event) {
-    if (event) event.preventDefault();
-    let url = document.getElementById('supa-url').value.trim();
-    let key = document.getElementById('supa-anon-key').value.trim();
-    
-    if (!url || !key) {
-        alert("Por favor, preencha a URL e a Chave Anon do seu Supabase.");
-        return;
-    }
-    
-    // Sanitize URL to remove trailing slash or /rest/v1 suffixes
-    url = url.replace(/\/$/, "").replace(/\/rest\/v1\/?$/, "").trim();
-    
-    localStorage.setItem('strivo_supabase_url', url);
-    localStorage.setItem('strivo_supabase_key', key);
-    alert("Configurações salvas! Conectando ao banco de dados Supabase...");
-    initApp();
-}
-
-function disconnectSupabase() {
-    if (confirm("Deseja realmente desconectar da nuvem e voltar ao Modo Local (offline)?")) {
-        localStorage.removeItem('strivo_supabase_url');
-        localStorage.removeItem('strivo_supabase_key');
-        supabaseClient = null;
-        supabaseMode = 'LOCAL';
-        alert("Modo Nuvem desconectado.");
-        initApp();
-    }
-}
-
-async function migrateLocalDataToSupabase() {
-    if (supabaseMode !== 'CLOUD' || !supabaseClient) {
-        alert("Por favor, conecte ao Supabase primeiro!");
-        return;
-    }
-    
-    const progressEl = document.getElementById('migration-progress-msg');
-    const localData = loadDataStore();
-    
-    if (progressEl) {
-        progressEl.classList.remove('hidden');
-        progressEl.innerText = "Iniciando migração...";
-    }
-    
-    try {
-        if (progressEl) progressEl.innerText = "Enviando usuários...";
-        const rUsers = await supabaseClient.from('users').upsert(localData.users);
-        if (rUsers.error) throw rUsers.error;
-        
-        if (progressEl) progressEl.innerText = "Enviando produtos...";
-        const rProducts = await supabaseClient.from('products').upsert(localData.products);
-        if (rProducts.error) throw rProducts.error;
-        
-        if (progressEl) progressEl.innerText = "Enviando estágios...";
-        const rStages = await supabaseClient.from('stages').upsert(localData.stages || []);
-        if (rStages.error) throw rStages.error;
-        
-        if (progressEl) progressEl.innerText = "Enviando leads...";
-        const rLeads = await supabaseClient.from('leads').upsert(localData.leads);
-        if (rLeads.error) throw rLeads.error;
-        
-        if (progressEl) progressEl.innerText = "Enviando clientes...";
-        const rClients = await supabaseClient.from('clients').upsert(localData.clients);
-        if (rClients.error) throw rClients.error;
-        
-        if (progressEl) progressEl.innerText = "Enviando aportes...";
-        const rAportes = await supabaseClient.from('aportes').upsert(localData.aportes);
-        if (rAportes.error) throw rAportes.error;
-        
-        if (progressEl) progressEl.innerText = "Enviando histórico de faturamento...";
-        const rFat = await supabaseClient.from('faturamentoHistorico').upsert(localData.faturamentoHistorico);
-        if (rFat.error) throw rFat.error;
-        
-        if (progressEl) {
-            progressEl.innerText = "✅ Migração de dados concluída com sucesso!";
-            setTimeout(() => progressEl.classList.add('hidden'), 5000);
-        }
-        alert("Toda a sua base local de dados foi migrada e sincronizada com sucesso no Supabase!");
-        
-        await initApp();
-    } catch (err) {
-        console.error("Erro na migração de dados:", err);
-        if (progressEl) {
-            progressEl.innerText = `❌ Erro na migração: ${err.message || err}`;
-        }
-        alert(`Erro na migração: ${err.message || err}`);
-    }
-}
-
 async function saveDataStore(data) {
     // 1. Salvar no localStorage local (backup offline)
     localStorage.setItem('strivo_datastore', JSON.stringify(data));
@@ -2742,7 +2744,4 @@ async function saveDataStore(data) {
 window.saveDataStore = saveDataStore;
 
 // Exportações globais para os formulários do index.html
-window.saveSupabaseConfig = saveSupabaseConfig;
-window.disconnectSupabase = disconnectSupabase;
-window.migrateLocalDataToSupabase = migrateLocalDataToSupabase;
 window.loadDataStoreFromCloud = loadDataStoreFromCloud;
