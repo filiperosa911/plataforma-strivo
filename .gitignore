@@ -19,3 +19,7 @@ auditoria-seguranca.md
 # O repositorio e publico — nada disso pode ser publicado.
 demandas/
 
+# Config local do Claude Code. settings.local.json guarda a allowlist de
+# permissoes (inclui o alias SSH da VPS) — nao pode ir para repo publico.
+.claude/
+

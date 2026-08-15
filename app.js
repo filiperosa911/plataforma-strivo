@@ -1896,7 +1896,10 @@ function renderPartnerships() {
             userTbody.innerHTML += `
                 <tr class="hover:bg-slate-900/10">
                     <td class="py-2.5 px-4 font-mono text-xs text-zinc-400">${u.id}</td>
-                    <td class="py-2.5 px-4 text-zinc-200 font-semibold">${u.name}</td>
+                    <td class="py-2.5 px-4 text-zinc-200 font-semibold">
+                        ${u.name}
+                        <div class="font-mono text-[9px] text-zinc-500 font-normal mt-0.5">${u.username || '<span class="text-amber-500">sem login</span>'}</div>
+                    </td>
                     <td class="py-2.5 px-4 font-mono text-[10px] text-zinc-500">${u.email}</td>
                     <td class="py-2.5 px-4">${roleBadge}</td>
                     <td class="py-2.5 px-4 font-mono text-xs text-zinc-400">${parent ? parent.name : 'N/A'}</td>
@@ -1964,10 +1967,36 @@ function openUserModal() {
     document.getElementById('user-modal-id').value = '';
     document.getElementById('user-modal-name').value = '';
     document.getElementById('user-modal-email').value = '';
+    document.getElementById('user-modal-username').value = '';
     document.getElementById('user-modal-role').value = 'agente';
     leaderSelect.value = '';
 
+    // Sugere o login a partir do nome enquanto o campo não foi tocado à mão.
+    const nameInput = document.getElementById('user-modal-name');
+    const userInput = document.getElementById('user-modal-username');
+    userInput.dataset.touched = '';
+    userInput.oninput = () => { userInput.dataset.touched = '1'; };
+    nameInput.oninput = () => {
+        if (!userInput.dataset.touched) userInput.value = sugerirUsername(nameInput.value);
+    };
+
     modal.classList.remove('hidden');
+}
+
+// "João da Silva" -> "joao.silva". Acompanha o padrão dos usuários já
+// cadastrados (filipe.rosa, celso.pimenta, vex.capital).
+function sugerirUsername(nome) {
+    const limpo = (nome || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '')
+        .trim()
+        .split(/\s+/)
+        .filter(p => p && !['de', 'da', 'do', 'dos', 'das', 'e'].includes(p));
+
+    if (limpo.length === 0) return '';
+    if (limpo.length === 1) return limpo[0];
+    return `${limpo[0]}.${limpo[limpo.length - 1]}`;
 }
 
 function closeUserModal() {
@@ -1986,6 +2015,11 @@ function editUserPrompt(userId) {
     document.getElementById('user-modal-email').value = user.email;
     document.getElementById('user-modal-role').value = user.role;
     document.getElementById('user-modal-parent').value = user.parentId || '';
+
+    // Login já definido: não sobrescrever com a sugestão ao editar o nome.
+    const userInput = document.getElementById('user-modal-username');
+    userInput.value = user.username || '';
+    userInput.dataset.touched = '1';
 }
 
 function saveUser(event) {
@@ -1996,24 +2030,49 @@ function saveUser(event) {
     const role = document.getElementById('user-modal-role').value;
     const parentIdVal = document.getElementById('user-modal-parent').value;
     const parentId = parentIdVal ? parseInt(parentIdVal) : null;
+    const username = document.getElementById('user-modal-username').value.trim().toLowerCase();
+    const editandoId = idVal ? parseInt(idVal) : null;
+
+    // "username" é UNIQUE NOT NULL no banco. Sem estas duas checagens o upsert
+    // falha no servidor — e como o supabase-js devolve o erro em vez de lançar,
+    // a falha passava calada e o cadastro sumia no reload.
+    if (!username) {
+        alert("ERRO: Informe o usuário de acesso (login).");
+        return;
+    }
+    if (!/^[a-z0-9._-]+$/.test(username)) {
+        alert("ERRO: O usuário de acesso aceita apenas letras minúsculas, números, ponto, hífen e underline.");
+        return;
+    }
+    if (db.users.some(u => u.id !== editandoId && (u.username || '').toLowerCase() === username)) {
+        alert(`ERRO: O usuário de acesso "${username}" já está em uso.`);
+        return;
+    }
+    if (db.users.some(u => u.id !== editandoId && (u.email || '').toLowerCase() === email.trim().toLowerCase())) {
+        alert(`ERRO: O e-mail "${email}" já está cadastrado.`);
+        return;
+    }
 
     if (idVal) {
         // Edit
-        const user = db.users.find(u => u.id === parseInt(idVal));
+        const user = db.users.find(u => u.id === editandoId);
         if (user) {
             user.name = name;
             user.email = email;
             user.role = role;
             user.parentId = parentId;
+            user.username = username;
         }
         logSystem(`Usuário atualizado: ${name}`);
     } else {
         // Create
-        const newId = db.users.length + 1;
+        // IDs por comprimento colidem depois de uma exclusão; usa o maior existente.
+        const newId = db.users.length > 0 ? Math.max(...db.users.map(u => u.id)) + 1 : 1;
         db.users.push({
             id: newId,
             name: name,
             email: email,
+            username: username,
             role: role,
             parentId: parentId,
             status: "active"
