@@ -11,11 +11,11 @@ const INITIAL_MOCK_DATA = {
         { id: 8, name: "S2 Invest", role: "agente", email: "s2@strivo.com", parentId: 5, username: "s2.invest", password: "S2Strivo", status: "active" }
     ],
     products: [
-        { id: 1, name: "Strivo Yield 40 FIF", taxAdm: 1.2, feeCap: 0.0, splitStrivo: 60, splitLider: 15, splitAgente: 25, cnpj: "46.847.516/0001-77", administrator: "VORTX", investorType: "Qualificado", performanceFee: "20% sobre o que exceder o benchmark", benchmark: "CDI+", status: "active" },
-        { id: 2, name: "Strivo Yield 45 FIF Cotas FIM", taxAdm: 1.0, feeCap: 0.0, splitStrivo: 50, splitLider: 20, splitAgente: 30, cnpj: "46.785.261/0001-65", administrator: "BTG Pactual", investorType: "Qualificado", performanceFee: "20% do que exceder o CDI", benchmark: "CDI+", status: "active" },
-        { id: 3, name: "Swiss CASH FIF Classe FIC Multimercado CP", taxAdm: 1.5, feeCap: 0.0, splitStrivo: 70, splitLider: 10, splitAgente: 20, cnpj: "61.925.539/0001-46", administrator: "Safra", investorType: "Normal", performanceFee: "0%", benchmark: "CDI", status: "active" },
-        { id: 4, name: "Triumph FIF Classe FIC Multimercado CP", taxAdm: 1.5, feeCap: 0.0, splitStrivo: 60, splitLider: 15, splitAgente: 25, cnpj: "61.926.195/0001-90", administrator: "Safra", investorType: "Normal", performanceFee: "0%", benchmark: "CDI", status: "active" },
-        { id: 5, name: "STYI11", taxAdm: 0.0, feeCap: 4.0, splitStrivo: 60, splitLider: 15, splitAgente: 25, cnpj: "59.678.586/0001-90", administrator: "VORTX", investorType: "Normal", performanceFee: "0%", benchmark: "N/A", status: "active" }
+        { id: 1, name: "Strivo Yield 40 FIF", taxAdm: 1.2, feeCap: 0.0, splitStrivo: 60, splitLider: 15, splitAgente: 25, cnpj: "46.847.516/0001-77", administrator: "VORTX", investorType: "Qualificado", performanceFee: 20.0, benchmark: "CDI+", status: "active" },
+        { id: 2, name: "Strivo Yield 45 FIF Cotas FIM", taxAdm: 1.0, feeCap: 0.0, splitStrivo: 50, splitLider: 20, splitAgente: 30, cnpj: "46.785.261/0001-65", administrator: "BTG Pactual", investorType: "Qualificado", performanceFee: 20.0, benchmark: "CDI+", status: "active" },
+        { id: 3, name: "Swiss CASH FIF Classe FIC Multimercado CP", taxAdm: 1.5, feeCap: 0.0, splitStrivo: 70, splitLider: 10, splitAgente: 20, cnpj: "61.925.539/0001-46", administrator: "Safra", investorType: "Normal", performanceFee: 0.0, benchmark: "CDI", status: "active" },
+        { id: 4, name: "Triumph FIF Classe FIC Multimercado CP", taxAdm: 1.5, feeCap: 0.0, splitStrivo: 60, splitLider: 15, splitAgente: 25, cnpj: "61.926.195/0001-90", administrator: "Safra", investorType: "Normal", performanceFee: 0.0, benchmark: "CDI", status: "active" },
+        { id: 5, name: "STYI11", taxAdm: 0.0, feeCap: 4.0, splitStrivo: 60, splitLider: 15, splitAgente: 25, cnpj: "59.678.586/0001-90", administrator: "VORTX", investorType: "Normal", performanceFee: 0.0, benchmark: "N/A", status: "active" }
     ],
     leads: [
         { 

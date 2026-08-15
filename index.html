@@ -389,9 +389,11 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+                <!-- Só divide em duas colunas a partir de 2xl: abaixo disso a tabela de
+                     produtos (7 colunas) não cabe em meia largura e corta a coluna de ação -->
+                <div class="grid grid-cols-1 min-[1800px]:grid-cols-12 gap-8 items-stretch">
                     <!-- Users List -->
-                    <div class="glass-card p-6 lg:col-span-7 space-y-4">
+                    <div class="glass-card p-6 min-[1800px]:col-span-6 space-y-4">
                         <div class="flex justify-between items-center mb-2">
                             <span class="font-mono text-[9px] text-zinc-400 uppercase tracking-wider block">[ CADASTRO
                                 DA REDE COMERCIAL ]</span>
@@ -419,7 +421,7 @@
                     </div>
 
                     <!-- Products List -->
-                    <div class="glass-card p-6 lg:col-span-5 space-y-4">
+                    <div class="glass-card p-6 min-[1800px]:col-span-6 space-y-4">
                         <div class="flex justify-between items-center mb-2">
                             <span class="font-mono text-[9px] text-zinc-400 uppercase tracking-wider block">[ PRODUTOS &
                                 REPASSES PADRÃO ]</span>
@@ -433,9 +435,13 @@
                                     <tr>
                                         <th class="py-2 px-4">ID</th>
                                         <th class="py-2 px-4">Nome</th>
-                                        <th class="py-2 px-4 text-right">Tx Adm</th>
-                                        <th class="py-2 px-4 text-right">Tx Cap</th>
-                                        <th class="py-2 px-4 text-right">Split Padrão</th>
+                                        <th class="py-2 px-2 text-right whitespace-nowrap">Tx Adm</th>
+                                        <th class="py-2 px-2 text-right whitespace-nowrap">Tx Cap</th>
+                                        <th class="py-2 px-2 text-right whitespace-nowrap">Tx Perf</th>
+                                        <th class="py-2 px-2 text-right whitespace-nowrap">Split Padrão
+                                            <span class="block font-normal normal-case text-[8px] text-zinc-500">casa
+                                                / líder / agente</span>
+                                        </th>
                                         <th class="py-2 px-4 text-right">Ação</th>
                                     </tr>
                                 </thead>
@@ -990,7 +996,8 @@
 
     <!-- Modal Product CRUD -->
     <div id="product-modal" class="modal-overlay fixed inset-0 flex items-center justify-center z-50 hidden">
-        <div class="bg-[#0b1022] border border-zinc-800 p-6 rounded-xl w-[90%] max-w-md space-y-6">
+        <div
+            class="bg-[#0b1022] border border-zinc-800 p-6 rounded-xl w-[90%] max-w-md max-h-[90vh] overflow-y-auto space-y-6">
             <div class="flex justify-between items-center border-b border-zinc-800 pb-3">
                 <h3 id="product-modal-title" class="font-bold text-white text-base">Novo Produto / Fundo</h3>
                 <button onclick="closeProductModal()" class="text-zinc-500 hover:text-white font-mono text-sm">[ Fechar
@@ -1015,6 +1022,46 @@
                             (%):</label>
                         <input type="number" step="0.1" id="product-modal-feecap" required
                             class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 focus:outline-none focus:border-cyan-500">
+                    </div>
+                    <div class="space-y-1">
+                        <label for="product-modal-performancefee"
+                            class="text-zinc-400 font-sans font-semibold">Taxa Performance (%):</label>
+                        <input type="number" step="0.1" min="0" max="100" id="product-modal-performancefee" required
+                            class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 focus:outline-none focus:border-cyan-500">
+                    </div>
+                    <div class="space-y-1">
+                        <label for="product-modal-benchmark"
+                            class="text-zinc-400 font-sans font-semibold">Benchmark:</label>
+                        <input type="text" id="product-modal-benchmark" placeholder="CDI+"
+                            class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 font-sans focus:outline-none focus:border-cyan-500">
+                    </div>
+                </div>
+
+                <div class="border-t border-zinc-800 pt-4 space-y-3">
+                    <span class="text-zinc-400 font-sans font-bold block mb-1">Ficha do Fundo</span>
+
+                    <div class="space-y-1">
+                        <label for="product-modal-cnpj" class="text-zinc-500 text-[10px]">CNPJ</label>
+                        <input type="text" id="product-modal-cnpj" placeholder="00.000.000/0001-00"
+                            class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 focus:outline-none focus:border-cyan-500">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <label for="product-modal-administrator"
+                                class="text-zinc-500 text-[10px]">Administrador</label>
+                            <input type="text" id="product-modal-administrator" placeholder="VORTX"
+                                class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 font-sans focus:outline-none focus:border-cyan-500">
+                        </div>
+                        <div class="space-y-1">
+                            <label for="product-modal-investortype" class="text-zinc-500 text-[10px]">Tipo de
+                                Investidor</label>
+                            <select id="product-modal-investortype"
+                                class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 font-sans focus:outline-none focus:border-cyan-500">
+                                <option value="Normal">Normal</option>
+                                <option value="Qualificado">Qualificado</option>
+                                <option value="Profissional">Profissional</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 

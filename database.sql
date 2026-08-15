@@ -29,7 +29,9 @@ CREATE TABLE IF NOT EXISTS "products" (
     "cnpj" TEXT,
     "administrator" TEXT,
     "investorType" TEXT,
-    "performanceFee" TEXT,
+    -- Percentual sobre o que exceder o "benchmark". Numérico (não texto) para
+    -- permitir cálculo — ver migração 2026-08-15 no fim do arquivo.
+    "performanceFee" NUMERIC(5,2) NOT NULL DEFAULT 0.00,
     "benchmark" TEXT,
     "status" TEXT NOT NULL DEFAULT 'active'
 );
@@ -380,3 +382,49 @@ CREATE OR REPLACE TRIGGER trigger_calculate_aporte_commission
     BEFORE INSERT OR UPDATE ON "aportes"
     FOR EACH ROW
     EXECUTE FUNCTION calculate_aporte_commission();
+
+
+-- ==================== MIGRAÇÕES ====================
+
+-- 2026-08-15 — "performanceFee" de TEXT para NUMERIC.
+-- Antes guardava frases ("20% sobre o que exceder o CDI"); a taxa agora é
+-- editável na tela de produtos e precisa ser calculável. A referência de
+-- cálculo continua na coluna "benchmark", que já existia em separado.
+-- Os CREATE TABLE acima usam IF NOT EXISTS, então em bancos já provisionados
+-- só este bloco aplica a mudança. Idempotente: não faz nada se já for numérico.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'products'
+          AND column_name = 'performanceFee'
+          AND data_type <> 'numeric'
+    ) THEN
+        -- O grupo é NÃO-capturante de propósito: substring(... from 'regex')
+        -- devolve só o primeiro grupo entre parênteses quando eles existem, e
+        -- um '(...)' comum faria "20% sobre o CDI" (grupo opcional sem match)
+        -- virar NULL e, pelo COALESCE, 0.00 silenciosamente.
+        -- O replace trata decimal com vírgula ("12,5%"), que não faz cast direto.
+        ALTER TABLE "products"
+            ALTER COLUMN "performanceFee" TYPE NUMERIC(5,2)
+            USING COALESCE(
+                NULLIF(
+                    replace(
+                        substring("performanceFee" from '[0-9]+(?:[.,][0-9]+)?'),
+                        ',', '.'
+                    ),
+                    ''
+                )::NUMERIC,
+                0.00
+            );
+
+        ALTER TABLE "products"
+            ALTER COLUMN "performanceFee" SET DEFAULT 0.00;
+
+        UPDATE "products" SET "performanceFee" = 0.00 WHERE "performanceFee" IS NULL;
+
+        ALTER TABLE "products"
+            ALTER COLUMN "performanceFee" SET NOT NULL;
+    END IF;
+END $$;

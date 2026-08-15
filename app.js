@@ -1916,16 +1916,30 @@ function renderPartnerships() {
                 actions = `<button onclick="editProductPrompt(${p.id})" class="text-[9px] font-mono text-cyan-400 hover:text-cyan-300 mr-2">[ Editar ]</button>`;
             }
 
+            const perfFee = parsePerformanceFee(p.performanceFee);
+            const perfCell = perfFee > 0
+                ? `<div class="text-zinc-300">${perfFee.toFixed(1)}%</div><div class="text-[9px] text-zinc-500">s/ ${p.benchmark || 'benchmark'}</div>`
+                : `<span class="text-zinc-600">—</span>`;
+
+            // Só o administrador na listagem: o CNPJ alarga demais a coluna e já
+            // fica disponível no modal de edição.
+            const fichaMeta = p.administrator || '';
+
             prodTbody.innerHTML += `
                 <tr class="hover:bg-slate-900/10">
                     <td class="py-2.5 px-4 font-mono text-xs text-zinc-400">${p.id}</td>
-                    <td class="py-2.5 px-4 text-zinc-200 font-semibold">${p.name}</td>
-                    <td class="py-2.5 px-4 font-mono text-xs text-zinc-300 text-right">${p.taxAdm.toFixed(1)}%</td>
-                    <td class="py-2.5 px-4 font-mono text-xs text-zinc-300 text-right">${p.feeCap.toFixed(1)}%</td>
-                    <td class="py-2.5 px-4 font-mono text-xs text-right">
-                        <div class="text-[10px] text-zinc-400">Casa: ${p.splitStrivo}% / Líder: ${p.splitLider}% / Agente: ${p.splitAgente}%</div>
+                    <td class="py-2.5 px-4 text-zinc-200 font-semibold">
+                        ${p.name}
+                        ${fichaMeta ? `<div class="font-mono text-[9px] text-zinc-500 font-normal mt-0.5 whitespace-nowrap">${fichaMeta}</div>` : ''}
                     </td>
-                    <td class="py-2.5 px-4 text-right">${actions}</td>
+                    <td class="py-2.5 px-2 font-mono text-xs text-zinc-300 text-right whitespace-nowrap">${Number(p.taxAdm).toFixed(1)}%</td>
+                    <td class="py-2.5 px-2 font-mono text-xs text-zinc-300 text-right whitespace-nowrap">${Number(p.feeCap).toFixed(1)}%</td>
+                    <td class="py-2.5 px-2 font-mono text-xs text-right whitespace-nowrap">${perfCell}</td>
+                    <td class="py-2.5 px-2 font-mono text-xs text-right">
+                        <div class="text-[10px] text-zinc-400 whitespace-nowrap"
+                            title="Casa: ${p.splitStrivo}% / Líder: ${p.splitLider}% / Agente: ${p.splitAgente}%">${p.splitStrivo} / ${p.splitLider} / ${p.splitAgente}</div>
+                    </td>
+                    <td class="py-2.5 px-4 text-right whitespace-nowrap">${actions}</td>
                 </tr>
             `;
         });
@@ -2029,6 +2043,11 @@ function openProductModal() {
     document.getElementById('product-modal-name').value = '';
     document.getElementById('product-modal-taxadm').value = '2.0';
     document.getElementById('product-modal-feecap').value = '1.5';
+    document.getElementById('product-modal-performancefee').value = '0';
+    document.getElementById('product-modal-benchmark').value = '';
+    document.getElementById('product-modal-cnpj').value = '';
+    document.getElementById('product-modal-administrator').value = '';
+    document.getElementById('product-modal-investortype').value = 'Normal';
     document.getElementById('product-modal-splitstrivo').value = '60';
     document.getElementById('product-modal-splitlider').value = '15';
     document.getElementById('product-modal-splitagente').value = '25';
@@ -2051,6 +2070,11 @@ function editProductPrompt(productId) {
     document.getElementById('product-modal-name').value = p.name;
     document.getElementById('product-modal-taxadm').value = p.taxAdm;
     document.getElementById('product-modal-feecap').value = p.feeCap;
+    document.getElementById('product-modal-performancefee').value = parsePerformanceFee(p.performanceFee);
+    document.getElementById('product-modal-benchmark').value = p.benchmark || '';
+    document.getElementById('product-modal-cnpj').value = p.cnpj || '';
+    document.getElementById('product-modal-administrator').value = p.administrator || '';
+    document.getElementById('product-modal-investortype').value = p.investorType || 'Normal';
     document.getElementById('product-modal-splitstrivo').value = p.splitStrivo;
     document.getElementById('product-modal-splitlider').value = p.splitLider;
     document.getElementById('product-modal-splitagente').value = p.splitAgente;
@@ -2062,6 +2086,11 @@ function saveProduct(event) {
     const name = document.getElementById('product-modal-name').value;
     const taxAdm = parseFloat(document.getElementById('product-modal-taxadm').value);
     const feeCap = parseFloat(document.getElementById('product-modal-feecap').value);
+    const performanceFee = parseFloat(document.getElementById('product-modal-performancefee').value);
+    const benchmark = document.getElementById('product-modal-benchmark').value.trim();
+    const cnpj = document.getElementById('product-modal-cnpj').value.trim();
+    const administrator = document.getElementById('product-modal-administrator').value.trim();
+    const investorType = document.getElementById('product-modal-investortype').value;
     const splitStrivo = parseInt(document.getElementById('product-modal-splitstrivo').value);
     const splitLider = parseInt(document.getElementById('product-modal-splitlider').value);
     const splitAgente = parseInt(document.getElementById('product-modal-splitagente').value);
@@ -2072,6 +2101,18 @@ function saveProduct(event) {
         return;
     }
 
+    if (!Number.isFinite(performanceFee) || performanceFee < 0 || performanceFee > 100) {
+        alert("ERRO: A taxa de performance deve ser um percentual entre 0 e 100.");
+        return;
+    }
+
+    // Benchmark só faz sentido quando existe performance a exceder — sem ele o
+    // percentual fica sem referência de cálculo.
+    if (performanceFee > 0 && !benchmark) {
+        alert("ERRO: Informe o benchmark quando houver taxa de performance.");
+        return;
+    }
+
     if (idVal) {
         // Edit
         const p = db.products.find(prod => prod.id === parseInt(idVal));
@@ -2079,6 +2120,11 @@ function saveProduct(event) {
             p.name = name;
             p.taxAdm = taxAdm;
             p.feeCap = feeCap;
+            p.performanceFee = performanceFee;
+            p.benchmark = benchmark;
+            p.cnpj = cnpj;
+            p.administrator = administrator;
+            p.investorType = investorType;
             p.splitStrivo = splitStrivo;
             p.splitLider = splitLider;
             p.splitAgente = splitAgente;
@@ -2086,12 +2132,19 @@ function saveProduct(event) {
         logSystem(`Produto atualizado: ${name}`);
     } else {
         // Create
-        const newId = db.products.length + 1;
+        // IDs sequenciais por comprimento colidem depois de uma exclusão; usa o
+        // maior id existente como base.
+        const newId = db.products.length > 0 ? Math.max(...db.products.map(p => p.id)) + 1 : 1;
         db.products.push({
             id: newId,
             name: name,
             taxAdm: taxAdm,
             feeCap: feeCap,
+            performanceFee: performanceFee,
+            benchmark: benchmark,
+            cnpj: cnpj,
+            administrator: administrator,
+            investorType: investorType,
             splitStrivo: splitStrivo,
             splitLider: splitLider,
             splitAgente: splitAgente,
@@ -2106,6 +2159,19 @@ function saveProduct(event) {
 }
 
 // ----------------- UTILITIES -----------------
+
+// A taxa de performance passou a ser numérica, mas bases ainda não migradas
+// guardam frases ("20% sobre o que exceder o CDI"). Aceita os dois formatos para
+// que a tela não quebre antes de rodar a migração.
+function parsePerformanceFee(raw) {
+    if (raw === null || raw === undefined || raw === '') return 0;
+    if (typeof raw === 'number') return Number.isFinite(raw) ? raw : 0;
+    const match = String(raw).match(/\d+(?:[.,]\d+)?/);
+    if (!match) return 0;
+    const parsed = parseFloat(match[0].replace(',', '.'));
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function formatCurrency(val) {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 }
