@@ -48,7 +48,7 @@ async function initApp() {
             { key: 'proposta', label: 'Proposta', order: 3, colorClass: 'badge-amber' },
             { key: 'fechado', label: 'Fechado', order: 4, colorClass: 'badge-emerald' }
         ];
-        await saveDataStore(db);
+        await salvar({ stages: db.stages });
     }
 
     // Theme initialization: default to 'light' since requested by user
@@ -82,7 +82,7 @@ async function initApp() {
                 { key: 'proposta', label: 'Proposta', order: 3, colorClass: 'badge-amber' },
                 { key: 'fechado', label: 'Fechado', order: 4, colorClass: 'badge-emerald' }
             ];
-            await saveDataStore(db);
+            await salvar({ stages: db.stages });
         }
 
         const loggedUser = db.users.find(u => u.auth_user_id === session.user.id);
@@ -593,7 +593,7 @@ function renderCRM() {
             { key: 'proposta', label: 'Proposta', order: 3, colorClass: 'badge-amber' },
             { key: 'fechado', label: 'Fechado', order: 4, colorClass: 'badge-emerald' }
         ];
-        saveDataStore(db);
+        salvar({ stages: db.stages });
     }
 
     const stages = db.stages;
@@ -824,7 +824,12 @@ function moveLead(leadId, targetStatus) {
         }
     }
 
-    saveDataStore(db);
+    // Só o lead movido e, se acabou de virar cliente, o registro dele.
+    const clienteNovo = lead.clientCode
+        ? db.clients.find(c => c.code === lead.clientCode)
+        : null;
+    salvar({ leads: [lead], clients: clienteNovo ? [clienteNovo] : [] });
+
     renderCRM();
     logSystem(`Lead "${lead.name}" movido de ${oldStatus.toUpperCase()} para ${targetStatus.toUpperCase()}`);
 }
@@ -926,6 +931,8 @@ function saveLead(event) {
     const agent = db.users.find(u => u.id === agentId);
     const leaderId = agent ? agent.parentId : null;
 
+    let leadSalvo = null;
+
     if (idVal) {
         // Edit
         const lead = db.leads.find(l => l.id === parseInt(idVal));
@@ -962,10 +969,12 @@ function saveLead(event) {
                 }
             }
             lead.status = stage;
+            leadSalvo = lead;
         }
     } else {
         // Create
-        const newId = 100 + db.leads.length + 1;
+        // IDs por comprimento colidem depois de uma exclusão; usa o maior existente.
+        const newId = db.leads.length > 0 ? Math.max(...db.leads.map(l => l.id)) + 1 : 101;
         let clientCode = null;
         
         if (stage === 'fechado') {
@@ -984,7 +993,7 @@ function saveLead(event) {
             logSystem(`Lead convertido em cliente no ato de criação: ${name} (${clientCode})`);
         }
 
-        db.leads.push({
+        const novoLead = {
             id: newId,
             name: name,
             status: stage,
@@ -1001,11 +1010,21 @@ function saveLead(event) {
             attachments: [],
             tasks: [],
             clientCode: clientCode
-        });
+        };
+        db.leads.push(novoLead);
+        leadSalvo = novoLead;
         logSystem(`Novo Lead adicionado: ${name}`);
     }
 
-    saveDataStore(db);
+    // Só o lead mexido e, quando virou cliente agora, o registro dele.
+    const clienteNovo = leadSalvo && leadSalvo.clientCode
+        ? db.clients.find(c => c.code === leadSalvo.clientCode)
+        : null;
+    salvar({
+        leads: leadSalvo ? [leadSalvo] : [],
+        clients: clienteNovo ? [clienteNovo] : []
+    });
+
     closeLeadModal();
     renderCRM();
 }
@@ -1120,7 +1139,7 @@ function addCurrentLeadTask() {
     const newTaskId = lead.tasks.length > 0 ? Math.max(...lead.tasks.map(t => t.id)) + 1 : 1;
     lead.tasks.push({ id: newTaskId, text: taskText, description: '', dueDate: taskDate, dueTime: '', completed: false, priority, label, subtasks: [] });
 
-    saveDataStore(db);
+    salvar({ leads: [lead] });
     logSystem(`Tarefa agendada para lead "${lead.name}": ${taskText}`);
     document.getElementById('new-task-text').value = '';
     document.getElementById('new-task-date').value = new Date().toISOString().split('T')[0];
@@ -1134,7 +1153,7 @@ function toggleLeadTask(leadId, taskId) {
     const task = lead.tasks.find(t => t.id === taskId);
     if (!task) return;
     task.completed = !task.completed;
-    saveDataStore(db);
+    salvar({ leads: [lead] });
     logSystem(`Tarefa "${task.text}" no lead "${lead.name}" marcada como ${task.completed ? 'CONCLUÍDA' : 'PENDENTE'}`);
     renderLeadTasks(leadId);
     renderCRM();
@@ -1149,7 +1168,7 @@ function deleteLeadTask(leadId, taskId) {
     if (taskIndex === -1) return;
     const taskText = lead.tasks[taskIndex].text;
     lead.tasks.splice(taskIndex, 1);
-    saveDataStore(db);
+    salvar({ leads: [lead] });
     logSystem(`Tarefa "${taskText}" excluída do lead "${lead.name}"`);
     renderLeadTasks(leadId);
     renderCRM();
@@ -1232,7 +1251,7 @@ function addSubtask() {
     if (!task.subtasks) task.subtasks = [];
     const newId = task.subtasks.length > 0 ? Math.max(...task.subtasks.map(s => s.id)) + 1 : 1;
     task.subtasks.push({ id: newId, text, completed: false });
-    saveDataStore(db);
+    salvar({ leads: [lead] });
     input.value = '';
     _renderSubtasks();
 }
@@ -1243,7 +1262,7 @@ function toggleSubtask(subtaskId) {
     const sub = task?.subtasks?.find(s => s.id === subtaskId);
     if (!sub) return;
     sub.completed = !sub.completed;
-    saveDataStore(db);
+    salvar({ leads: [lead] });
     _renderSubtasks();
 }
 
@@ -1252,7 +1271,7 @@ function deleteSubtask(subtaskId) {
     const task = lead?.tasks.find(t => t.id === _tdmTaskId);
     if (!task?.subtasks) return;
     task.subtasks = task.subtasks.filter(s => s.id !== subtaskId);
-    saveDataStore(db);
+    salvar({ leads: [lead] });
     _renderSubtasks();
 }
 
@@ -1267,7 +1286,7 @@ function saveTaskDetail() {
     task.description = document.getElementById('tdm-description').value;
     task.priority = _tdmPriority;
     task.label = _tdmLabel;
-    saveDataStore(db);
+    salvar({ leads: [lead] });
     renderLeadTasks(_tdmLeadId);
     closeTaskDetailModal();
     const agendaView = document.getElementById('view-agenda');
@@ -1279,7 +1298,7 @@ function deleteCurrentTask() {
     const lead = db.leads.find(l => l.id === _tdmLeadId);
     if (!lead) return;
     lead.tasks = lead.tasks.filter(t => t.id !== _tdmTaskId);
-    saveDataStore(db);
+    salvar({ leads: [lead] });
     renderLeadTasks(_tdmLeadId);
     closeTaskDetailModal();
     const agendaView = document.getElementById('view-agenda');
@@ -1555,7 +1574,7 @@ function uploadCurrentLeadFile(fileInput) {
         date: new Date().toISOString().split('T')[0]
     });
 
-    saveDataStore(db);
+    salvar({ leads: [lead] });
     logSystem(`Arquivo anexado ao lead "${lead.name}": ${file.name} (${sizeStr})`);
     
     fileInput.value = ''; // clear input
@@ -1571,7 +1590,7 @@ function deleteLeadAttachment(leadId, index) {
     if (!file) return;
 
     lead.attachments.splice(index, 1);
-    saveDataStore(db);
+    salvar({ leads: [lead] });
     logSystem(`Anexo "${file.name}" excluído do lead "${lead.name}"`);
     
     renderLeadAttachments(leadId);
@@ -1707,7 +1726,7 @@ function simulateSpreadsheetUpload() {
         uploadLogs.innerHTML = finalLogHtml;
 
         // Save states
-        saveDataStore(db);
+        salvar({ faturamentoHistorico: db.faturamentoHistorico });
         renderFinancial();
         renderDashboard();
         
@@ -1796,7 +1815,7 @@ function approveAporte(aporteId) {
         date: new Date().toISOString().split('T')[0]
     });
 
-    saveDataStore(db);
+    salvar({ aportes: [ap] });
     renderApprovals();
     renderDashboard();
     logSystem(`Aporte de "${ap.clientName}" aprovado pela liderança comercial.`);
@@ -1813,7 +1832,7 @@ function homologateAporte(aporteId) {
         date: new Date().toISOString().split('T')[0]
     });
 
-    saveDataStore(db);
+    salvar({ aportes: [ap] });
     renderApprovals();
     renderDashboard();
     logSystem(`Aporte de "${ap.clientName}" homologado pela diretoria. Comissão liberada.`);
@@ -1853,8 +1872,9 @@ function saveAporte(event) {
     const agent = db.users.find(u => u.id === agentId);
     const leaderId = agent ? agent.parentId : null;
 
-    const newId = 200 + db.aportes.length + 1;
-    db.aportes.push({
+    // IDs por comprimento colidem depois de uma exclusão; usa o maior existente.
+    const newId = db.aportes.length > 0 ? Math.max(...db.aportes.map(a => a.id)) + 1 : 201;
+    const novoAporte = {
         id: newId,
         clientName: name,
         productId: productId,
@@ -1864,9 +1884,10 @@ function saveAporte(event) {
         date: new Date().toISOString().split('T')[0],
         status: "pendente_lider",
         logs: [{ action: "criado", user: db.users.find(u => u.id === currentUserId).name, date: new Date().toISOString().split('T')[0] }]
-    });
+    };
+    db.aportes.push(novoAporte);
 
-    saveDataStore(db);
+    salvar({ aportes: [novoAporte] });
     closeAporteModal();
     renderApprovals();
     logSystem(`Novo aporte cadastrado para "${name}" pelo assessor.`);
@@ -2053,6 +2074,8 @@ function saveUser(event) {
         return;
     }
 
+    let usuarioSalvo = null;
+
     if (idVal) {
         // Edit
         const user = db.users.find(u => u.id === editandoId);
@@ -2062,13 +2085,14 @@ function saveUser(event) {
             user.role = role;
             user.parentId = parentId;
             user.username = username;
+            usuarioSalvo = user;
         }
         logSystem(`Usuário atualizado: ${name}`);
     } else {
         // Create
         // IDs por comprimento colidem depois de uma exclusão; usa o maior existente.
         const newId = db.users.length > 0 ? Math.max(...db.users.map(u => u.id)) + 1 : 1;
-        db.users.push({
+        const novoUsuario = {
             id: newId,
             name: name,
             email: email,
@@ -2076,14 +2100,16 @@ function saveUser(event) {
             role: role,
             parentId: parentId,
             status: "active"
-        });
+        };
+        db.users.push(novoUsuario);
+        usuarioSalvo = novoUsuario;
         logSystem(`Novo usuário cadastrado: ${name} (${role.toUpperCase()})`);
         if (supabaseMode === 'CLOUD') {
             alert("Perfil criado. Importante: essa pessoa ainda não consegue logar — o acesso real (Supabase Auth) precisa ser provisionado à parte. Peça pra criar o login dela.");
         }
     }
 
-    saveDataStore(db);
+    salvar({ users: usuarioSalvo ? [usuarioSalvo] : [] });
     closeUserModal();
     renderPartnerships();
     renderSidebar();
@@ -2172,6 +2198,8 @@ function saveProduct(event) {
         return;
     }
 
+    let produtoSalvo = null;
+
     if (idVal) {
         // Edit
         const p = db.products.find(prod => prod.id === parseInt(idVal));
@@ -2187,6 +2215,7 @@ function saveProduct(event) {
             p.splitStrivo = splitStrivo;
             p.splitLider = splitLider;
             p.splitAgente = splitAgente;
+            produtoSalvo = p;
         }
         logSystem(`Produto atualizado: ${name}`);
     } else {
@@ -2194,7 +2223,7 @@ function saveProduct(event) {
         // IDs sequenciais por comprimento colidem depois de uma exclusão; usa o
         // maior id existente como base.
         const newId = db.products.length > 0 ? Math.max(...db.products.map(p => p.id)) + 1 : 1;
-        db.products.push({
+        const novoProduto = {
             id: newId,
             name: name,
             taxAdm: taxAdm,
@@ -2208,11 +2237,13 @@ function saveProduct(event) {
             splitLider: splitLider,
             splitAgente: splitAgente,
             status: "active"
-        });
+        };
+        db.products.push(novoProduto);
+        produtoSalvo = novoProduto;
         logSystem(`Novo Produto adicionado: ${name}`);
     }
 
-    saveDataStore(db);
+    salvar({ products: produtoSalvo ? [produtoSalvo] : [] });
     closeProductModal();
     renderPartnerships();
 }
@@ -2280,7 +2311,7 @@ function renderFunnelStages() {
             { key: 'proposta', label: 'Proposta', order: 3, colorClass: 'badge-amber' },
             { key: 'fechado', label: 'Fechado', order: 4, colorClass: 'badge-emerald' }
         ];
-        saveDataStore(db);
+        salvar({ stages: db.stages });
     }
 
     container.innerHTML = db.stages.map((stage, idx) => {
@@ -2346,7 +2377,7 @@ function createNewStage(event) {
         colorClass: colorClass
     });
 
-    saveDataStore(db);
+    salvar({ stages: db.stages });
     logSystem(`Nova etapa do funil criada: ${label} (Chave: ${key})`);
 
     labelInput.value = '';
@@ -2365,7 +2396,7 @@ function deleteStage(stageKey) {
 
     if (confirm('Tem certeza que deseja excluir esta etapa do funil?')) {
         db.stages = db.stages.filter(s => s.key !== stageKey);
-        saveDataStore(db);
+        remover('stages', 'key', stageKey);
         logSystem(`Etapa do funil excluída: ${stageKey}`);
         renderFunnelStages();
         renderCRM();
@@ -2380,7 +2411,7 @@ function renameStagePrompt(stageKey) {
     if (newName && newName.trim()) {
         const oldName = stage.label;
         stage.label = newName.trim();
-        saveDataStore(db);
+        salvar({ stages: [stage] });
         logSystem(`Etapa do funil "${oldName}" renomeada para "${stage.label}"`);
         renderFunnelStages();
         renderCRM();
@@ -2402,7 +2433,7 @@ function moveStageOrder(stageKey, direction) {
         s.order = index + 1;
     });
 
-    saveDataStore(db);
+    salvar({ stages: db.stages });
     logSystem(`Ordem das etapas do funil alterada.`);
     renderFunnelStages();
     renderCRM();
@@ -2842,31 +2873,109 @@ async function loadDataStoreFromCloud() {
     }
 }
 
-async function saveDataStore(data) {
-    // 1. Salvar no localStorage local (backup offline)
-    localStorage.setItem('strivo_datastore', JSON.stringify(data));
-    
-    // 2. Se modo nuvem ativo, upsert das tabelas modificadas para o Supabase
-    if (supabaseMode === 'CLOUD' && supabaseClient) {
-        try {
-            await Promise.all([
-                supabaseClient.from('users').upsert(data.users),
-                supabaseClient.from('products').upsert(data.products),
-                supabaseClient.from('stages').upsert(data.stages || []),
-                supabaseClient.from('leads').upsert(data.leads),
-                supabaseClient.from('clients').upsert(data.clients),
-                supabaseClient.from('aportes').upsert(data.aportes),
-                supabaseClient.from('faturamentoHistorico').upsert(data.faturamentoHistorico)
-            ]);
-        } catch (err) {
-            console.error("Erro na sincronização automática do Supabase:", err);
-            logSystem("Falha ao salvar alterações no Supabase. Modificações mantidas localmente.");
-        }
+// Grava o retrato completo no localStorage — backup offline, e é o que o modo
+// LOCAL usa como banco. Barato o bastante para rodar a cada alteração.
+function salvarLocal(data) {
+    try {
+        localStorage.setItem('strivo_datastore', JSON.stringify(data || db));
+        return true;
+    } catch (err) {
+        console.error('Falha ao gravar no localStorage:', err);
+        avisarFalhaPersistencia('Não foi possível salvar neste navegador. O armazenamento pode estar cheio.');
+        return false;
     }
+}
+
+// Sincroniza na nuvem APENAS os registros que mudaram:
+//     await salvar({ leads: [lead] })
+//     await salvar({ leads: [lead], clients: [cliente] })
+//
+// Antes daqui, saveDataStore() reenviava as 7 tabelas inteiras a cada clique.
+// Isso tinha dois efeitos ruins: sobrescrevia o trabalho de quem estivesse
+// mexendo ao mesmo tempo (last-write-wins global) e, com o RLS ativo, gerava
+// 403 em cascata para agente/liderança — que não escrevem em users, products,
+// stages, clients nem faturamento.
+async function salvar(alteracoes) {
+    salvarLocal(db);
+
+    if (supabaseMode !== 'CLOUD' || !supabaseClient) return { ok: true, erros: [] };
+
+    const entradas = Object.entries(alteracoes || {})
+        .map(([tabela, regs]) => [tabela, (Array.isArray(regs) ? regs : [regs]).filter(Boolean)])
+        .filter(([, regs]) => regs.length > 0);
+
+    if (entradas.length === 0) return { ok: true, erros: [] };
+
+    let resultados;
+    try {
+        resultados = await Promise.all(
+            entradas.map(([tabela, regs]) => supabaseClient.from(tabela).upsert(regs))
+        );
+    } catch (err) {
+        // Só falha de transporte (rede/DNS/CORS) chega a rejeitar de verdade.
+        return reportarFalhaSync([{ tabela: entradas.map(e => e[0]).join(', '), erro: err }]);
+    }
+
+    // O supabase-js NÃO rejeita quando a query falha: ele resolve com
+    // { data, error }. O try/catch antigo por isso nunca disparava, e todo 403
+    // de RLS ou violação de constraint passava calado — inclusive o cadastro de
+    // usuário sem username, que sumia no reload sem qualquer aviso.
+    const erros = [];
+    resultados.forEach((res, i) => {
+        if (res && res.error) erros.push({ tabela: entradas[i][0], erro: res.error });
+    });
+
+    return erros.length > 0 ? reportarFalhaSync(erros) : { ok: true, erros: [] };
+}
+
+// Exclusão de verdade no servidor. O upsert nunca remove linha: sem isto, uma
+// etapa apagada na tela reaparecia no próximo login vinda da nuvem.
+async function remover(tabela, coluna, valor) {
+    salvarLocal(db);
+
+    if (supabaseMode !== 'CLOUD' || !supabaseClient) return { ok: true, erros: [] };
+
+    try {
+        const res = await supabaseClient.from(tabela).delete().eq(coluna, valor);
+        if (res && res.error) return reportarFalhaSync([{ tabela, erro: res.error }]);
+        return { ok: true, erros: [] };
+    } catch (err) {
+        return reportarFalhaSync([{ tabela, erro: err }]);
+    }
+}
+
+function reportarFalhaSync(erros) {
+    erros.forEach(e => console.error(`Erro ao sincronizar "${e.tabela}":`, e.erro));
+    const detalhe = erros
+        .map(e => `${e.tabela}: ${(e.erro && (e.erro.message || e.erro.code)) || 'erro desconhecido'}`)
+        .join(' · ');
+    logSystem(`Falha ao sincronizar (${detalhe}). Alterações mantidas apenas neste navegador.`);
+    avisarFalhaPersistencia(`Alteração salva só neste navegador — o servidor recusou. ${detalhe}`);
+    return { ok: false, erros };
+}
+
+function avisarFalhaPersistencia(mensagem) {
+    const banner = document.getElementById('persist-error-banner');
+    if (!banner) { alert(mensagem); return; }
+    const alvo = banner.querySelector('[data-persist-msg]');
+    if (alvo) alvo.innerText = mensagem;
+    banner.classList.remove('hidden');
+}
+
+function fecharAvisoPersistencia() {
+    const banner = document.getElementById('persist-error-banner');
+    if (banner) banner.classList.add('hidden');
+}
+
+// Mantida por compatibilidade: grava só localmente. Quem precisa sincronizar
+// com a nuvem chama salvar({ tabela: [registro] }).
+async function saveDataStore(data) {
+    salvarLocal(data);
 }
 
 // Sobrescrever a função global saveDataStore do mock-data.js
 window.saveDataStore = saveDataStore;
+window.fecharAvisoPersistencia = fecharAvisoPersistencia;
 
 // Exportações globais para os formulários do index.html
 window.loadDataStoreFromCloud = loadDataStoreFromCloud;
