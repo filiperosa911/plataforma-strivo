@@ -5,6 +5,9 @@ let db = loadDataStore();
 let currentRole = 'diretoria';
 let currentUserId = 1; // Filipe Rosa
 let currentCRMView = 'kanban';
+// Funil ativo na tela. Um só era suficiente quando o CRM tinha um funil fixo;
+// agora Kanban, Pipeline e Ajustes trabalham sempre sobre este.
+let currentPipelineId = 1;
 let listenersConnected = false;
 let supabaseClient = null;
 let supabaseMode = 'LOCAL'; // 'LOCAL' or 'CLOUD'
@@ -287,7 +290,7 @@ function renderDashboard() {
     // Calculate metrics
     // AUM / Total leads value
     const visibleLeads = db.leads.filter(l => visibleUserIds.includes(l.agentId));
-    const totalPipeline = visibleLeads.filter(l => l.status !== 'fechado').reduce((acc, curr) => acc + curr.value, 0);
+    const totalPipeline = visibleLeads.filter(l => !_leadEstaFechado(l)).reduce((acc, curr) => acc + curr.value, 0);
 
     // Total Client Accounts
     const visibleClients = db.clients.filter(c => visibleUserIds.includes(c.agentId));
@@ -390,7 +393,7 @@ function renderDashboard() {
         
         // Calculate pipeline value per user (excluding status = 'fechado')
         const pipelineData = visibleUsers.map(user => {
-            const userLeads = visibleLeads.filter(l => l.agentId === user.id && l.status !== 'fechado');
+            const userLeads = visibleLeads.filter(l => l.agentId === user.id && !_leadEstaFechado(l));
             const userPipelineValue = userLeads.reduce((acc, curr) => acc + curr.value, 0);
             return {
                 id: user.id,
@@ -605,20 +608,25 @@ function renderAnalyticsChart() {
 // ----------------- MÓDULO 02: CRM & KANBAN -----------------
 function renderCRM() {
     const visibleUserIds = getVisibleUserIds();
-    const visibleLeads = db.leads.filter(l => visibleUserIds.includes(l.agentId));
 
     // Ensure stages exist
     if (!db.stages || db.stages.length === 0) {
         db.stages = [
-            { key: 'prospect', label: 'Prospect', order: 1, colorClass: 'badge-blue' },
-            { key: 'contato', label: 'Contato', order: 2, colorClass: 'badge-purple' },
-            { key: 'proposta', label: 'Proposta', order: 3, colorClass: 'badge-amber' },
-            { key: 'fechado', label: 'Fechado', order: 4, colorClass: 'badge-emerald' }
+            { key: 'prospect', label: 'Prospect', order: 1, colorClass: 'badge-blue', pipelineId: 1 },
+            { key: 'contato', label: 'Contato', order: 2, colorClass: 'badge-purple', pipelineId: 1 },
+            { key: 'proposta', label: 'Proposta', order: 3, colorClass: 'badge-amber', pipelineId: 1 },
+            { key: 'fechado', label: 'Fechado', order: 4, colorClass: 'badge-emerald', pipelineId: 1 }
         ];
         salvar({ stages: db.stages });
     }
 
-    const stages = db.stages;
+    renderSeletorFunil();
+
+    // Kanban e lista mostram só o funil ativo: etapas de funis diferentes não
+    // fazem sentido lado a lado.
+    const stages = stagesDoFunil(currentPipelineId);
+    const visibleLeads = leadsDoFunil(currentPipelineId,
+        db.leads.filter(l => visibleUserIds.includes(l.agentId)));
 
     // 1. Render view according to current view mode
     if (currentCRMView === 'kanban') {
@@ -703,14 +711,14 @@ function renderCRM() {
                     }
 
                     let codeBadge = '';
-                    if (lead.status === 'fechado' && lead.clientCode) {
+                    if (stage.key === _chaveEstagioFinal(currentPipelineId) && lead.clientCode) {
                         codeBadge = `<div class="font-mono text-[9px] text-cyan-400 bg-cyan-950/40 border border-cyan-500/20 px-1.5 py-0.5 rounded mt-2 text-center uppercase tracking-wider">${lead.clientCode}</div>`;
                     }
 
                     // Lead sem próximo passo agendado: sinaliza no card para não
                     // esfriar sem ninguém notar. Não vale para a etapa final.
                     let semAtividade = '';
-                    if (stage.key !== _chaveEstagioFinal() && !temProximaAtividade(lead)) {
+                    if (stage.key !== _chaveEstagioFinal(currentPipelineId) && !temProximaAtividade(lead)) {
                         semAtividade = `<div class="flex items-center gap-1 mt-2 text-[8px] font-mono text-amber-500/90 bg-amber-950/30 border border-amber-800/40 rounded px-1.5 py-0.5" title="Nenhuma tarefa agendada para este lead">
                             <span>⚠</span> SEM PRÓXIMO PASSO
                         </div>`;
@@ -836,7 +844,7 @@ function moveLead(leadId, targetStatus) {
     lead.status = targetStatus;
 
     // Se moveu para "fechado" e não tem código de cliente, gera um código automático de cliente e cadastra
-    if (targetStatus === 'fechado' && !lead.clientCode) {
+    if (targetStatus === _chaveEstagioFinal(_funilDoLead(lead)) && !lead.clientCode) {
         const product = db.products.find(p => p.id === lead.productId);
         const codePrefix = product ? product.name.substring(0, 3).toUpperCase() : 'STV';
         const num = Math.floor(100 + Math.random() * 900);
@@ -878,14 +886,23 @@ function openLeadModal(leadId) {
     
     productSelect.innerHTML = db.products.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
     
-    // Filter agents select by hierarchy
-    const visibleUsers = db.users.filter(u => u.role === 'agente' || u.role === 'lideranca');
-    agentSelect.innerHTML = visibleUsers.map(u => `<option value="${u.id}">${u.name} (${u.role.toUpperCase()})</option>`).join('');
+    // Diretoria e admin também captam direto ("é direto com vocês", no
+    // levantamento com o cliente) — e, sem estarem na lista, o default
+    // agentSelect.value = currentUserId não casava com opção nenhuma: o select
+    // ficava vazio, agentId virava NaN e o lead nascia invisível para todos.
+    const visibleUsers = db.users.filter(u => ['agente', 'lideranca', 'diretoria', 'admin'].includes(u.role));
+    agentSelect.innerHTML = visibleUsers
+        .map(u => `<option value="${u.id}">${escapeHtml(u.name)} (${escapeHtml(u.role.toUpperCase())})</option>`).join('');
 
-    // Fill dynamic stages select
-    if (stageSelect && db.stages) {
-        stageSelect.innerHTML = db.stages.map(s => `<option value="${s.key}">${s.label}</option>`).join('');
+    // Funil do lead (ou o ativo, se for novo) e as etapas correspondentes.
+    const funilDoModal = lead ? _funilDoLead(lead) : currentPipelineId;
+    const pipelineSelect = document.getElementById('lead-modal-pipeline');
+    if (pipelineSelect) {
+        pipelineSelect.innerHTML = listaPipelines()
+            .map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+        pipelineSelect.value = funilDoModal;
     }
+    _preencherEtapasDoModal(funilDoModal, lead ? lead.status : null);
 
     const tasksList = document.getElementById('lead-tasks-list');
     const attachmentsList = document.getElementById('lead-attachments-list');
@@ -942,6 +959,26 @@ function openLeadModal(leadId) {
     modal.classList.remove('hidden');
 }
 
+// As etapas do select dependem do funil escolhido. Trocar o funil no modal
+// precisa trocar a lista, senão o lead ficaria com etapa de outro funil.
+function _preencherEtapasDoModal(pipelineId, etapaAtual) {
+    const stageSelect = document.getElementById('lead-modal-stage');
+    if (!stageSelect) return;
+    const etapas = stagesDoFunil(pipelineId);
+    stageSelect.innerHTML = etapas
+        .map(s => `<option value="${s.key}">${escapeHtml(s.label)}</option>`).join('');
+    if (etapaAtual && etapas.some(s => s.key === etapaAtual)) {
+        stageSelect.value = etapaAtual;
+    } else if (etapas.length > 0) {
+        stageSelect.selectedIndex = 0;
+    }
+}
+
+function onTrocaFunilNoModal(pipelineId) {
+    // Sem etapa equivalente entre funis, cai na primeira do funil novo.
+    _preencherEtapasDoModal(parseInt(pipelineId), null);
+}
+
 function closeLeadModal() {
     const modal = document.getElementById('lead-modal');
     if (modal) modal.classList.add('hidden');
@@ -959,6 +996,20 @@ function saveLead(event) {
     const source = document.getElementById('lead-modal-source').value;
     const extraInfo = document.getElementById('lead-modal-extrainfo').value;
     const stage = document.getElementById('lead-modal-stage').value;
+    const pipelineId = parseInt(document.getElementById('lead-modal-pipeline')?.value || currentPipelineId);
+
+    // A etapa tem que pertencer ao funil escolhido, senão o lead some da tela.
+    if (!stagesDoFunil(pipelineId).some(s => s.key === stage)) {
+        alert('ERRO: a etapa selecionada não pertence ao funil escolhido.');
+        return;
+    }
+
+    // Guarda de rede: lead sem assessor válido não passa por nenhum filtro de
+    // visibilidade e some da tela sem erro nenhum.
+    if (!Number.isFinite(agentId) || !db.users.some(u => u.id === agentId)) {
+        alert('ERRO: selecione o assessor responsável pelo lead.');
+        return;
+    }
 
     const agent = db.users.find(u => u.id === agentId);
     const leaderId = agent ? agent.parentId : null;
@@ -978,11 +1029,12 @@ function saveLead(event) {
             lead.email = email;
             lead.source = source;
             lead.extraInfo = extraInfo;
+            lead.pipelineId = pipelineId;
             // update split to 100% for that single advisor by default if changed
             lead.splits = [{ agentId: agentId, pct: 100 }];
 
             // Convert to client if stage changed to fechado and code is not set
-            if (stage === 'fechado' && lead.status !== 'fechado' && !lead.clientCode) {
+            if (stage === _chaveEstagioFinal(pipelineId) && !_leadEstaFechado(lead) && !lead.clientCode) {
                 const product = db.products.find(p => p.id === productId);
                 const codePrefix = product ? product.name.substring(0, 3).toUpperCase() : 'STV';
                 const num = Math.floor(100 + Math.random() * 900);
@@ -1009,7 +1061,7 @@ function saveLead(event) {
         const newId = db.leads.length > 0 ? Math.max(...db.leads.map(l => l.id)) + 1 : 101;
         let clientCode = null;
         
-        if (stage === 'fechado') {
+        if (stage === _chaveEstagioFinal(pipelineId)) {
             const product = db.products.find(p => p.id === productId);
             const codePrefix = product ? product.name.substring(0, 3).toUpperCase() : 'STV';
             const num = Math.floor(100 + Math.random() * 900);
@@ -1029,6 +1081,7 @@ function saveLead(event) {
             id: newId,
             name: name,
             status: stage,
+            pipelineId: pipelineId,
             productId: productId,
             agentId: agentId,
             leaderId: leaderId,
@@ -1659,11 +1712,11 @@ function _agendaLeadsParados() {
     if (_agendaSelectedDate) return '';
 
     const visibleIds = getVisibleUserIds();
-    const stageFinal = _chaveEstagioFinal();
+    // Cada lead fecha na ultima etapa do proprio funil.
     const parados = db.leads
         .filter(l => visibleIds.includes(l.agentId))
         .filter(l => !_agendaFiltroAgente || l.agentId === _agendaFiltroAgente)
-        .filter(l => l.status !== stageFinal)
+        .filter(l => !_leadEstaFechado(l))
         .filter(l => !temProximaAtividade(l));
 
     if (parados.length === 0) return '';
@@ -2537,11 +2590,101 @@ function escapeHtml(valor) {
         .replace(/'/g, '&#39;');
 }
 
-// A etapa final do funil é a de maior "order", não a chave literal 'fechado' —
-// o funil é customizável e o cliente já renomeia etapas.
-function _chaveEstagioFinal() {
-    if (!db.stages || db.stages.length === 0) return 'fechado';
-    return db.stages.reduce((maior, s) => (s.order > maior.order ? s : maior), db.stages[0]).key;
+// ----------------- FUNIS (PIPELINES) -----------------
+
+// Base padrão para quando ainda não há funis (modo local ou banco novo).
+function _pipelinesPadrao() {
+    return [{ id: 1, name: 'Comercial', order: 1, isDefault: true }];
+}
+
+function listaPipelines() {
+    if (!db.pipelines || db.pipelines.length === 0) db.pipelines = _pipelinesPadrao();
+    return [...db.pipelines].sort((a, b) => (a.order || 0) - (b.order || 0));
+}
+
+function pipelineAtual() {
+    const todos = listaPipelines();
+    return todos.find(p => p.id === currentPipelineId) || todos[0];
+}
+
+// Etapas de um funil, já ordenadas. Registro antigo sem pipelineId pertence ao
+// funil 1, que é o comercial herdado da versão de funil único.
+function stagesDoFunil(pipelineId) {
+    const id = pipelineId || currentPipelineId;
+    return (db.stages || [])
+        .filter(s => (s.pipelineId || 1) === id)
+        .sort((a, b) => a.order - b.order);
+}
+
+function leadsDoFunil(pipelineId, leads) {
+    const id = pipelineId || currentPipelineId;
+    return (leads || db.leads || []).filter(l => (l.pipelineId || 1) === id);
+}
+
+// A etapa final é a de maior "order" dentro do próprio funil — não a chave
+// literal 'fechado'. Cada funil tem o seu desfecho, e as etapas são renomeáveis.
+function _chaveEstagioFinal(pipelineId) {
+    const etapas = stagesDoFunil(pipelineId);
+    if (etapas.length === 0) return 'fechado';
+    return etapas[etapas.length - 1].key;
+}
+
+// O funil de um lead pode ter sido apagado; cai no padrão para não sumir da tela.
+function _funilDoLead(lead) {
+    const id = lead.pipelineId || 1;
+    return listaPipelines().some(p => p.id === id) ? id : listaPipelines()[0].id;
+}
+
+// "Fechado" deixou de ser uma chave fixa: é a última etapa do funil do lead.
+// Um lead do funil Especialistas fecha em "Acompanhamento", não em "fechado".
+function _leadEstaFechado(lead) {
+    return lead.status === _chaveEstagioFinal(_funilDoLead(lead));
+}
+
+// Seletor que aparece no topo do CRM e do Pipeline. Mostra a contagem de leads
+// de cada funil para dar noção de volume antes de trocar.
+function renderSeletorFunil() {
+    const funis = listaPipelines();
+    if (!listaPipelines().some(p => p.id === currentPipelineId)) {
+        currentPipelineId = funis[0].id;
+    }
+
+    const visibleUserIds = getVisibleUserIds();
+    const visiveis = db.leads.filter(l => visibleUserIds.includes(l.agentId));
+
+    ['crm-pipeline-selector', 'pipeline-view-selector'].forEach(alvoId => {
+        const alvo = document.getElementById(alvoId);
+        if (!alvo) return;
+
+        const botoes = funis.map(p => {
+            const qtd = leadsDoFunil(p.id, visiveis).length;
+            const ativo = p.id === currentPipelineId;
+            const classe = ativo
+                ? 'bg-cyan-500 text-black font-bold'
+                : 'text-zinc-400 hover:text-zinc-100 hover:bg-white/5';
+            return `<button type="button" onclick="setPipelineAtual(${p.id})"
+                        class="px-3 py-1.5 rounded font-mono text-[10px] uppercase tracking-wider transition-colors whitespace-nowrap ${classe}"
+                        title="${escapeHtml(p.name)} — ${qtd} lead(s)">
+                        ${escapeHtml(p.name)}
+                        <span class="${ativo ? 'text-black/60' : 'text-zinc-600'}">${qtd}</span>
+                    </button>`;
+        }).join('');
+
+        alvo.innerHTML = `<div class="flex items-center gap-1 bg-slate-900 border border-zinc-800 rounded-lg p-1 overflow-x-auto">
+            <span class="pl-2 pr-1 font-mono text-[9px] uppercase text-zinc-600 whitespace-nowrap">Funil</span>
+            ${botoes}
+        </div>`;
+    });
+}
+
+function setPipelineAtual(pipelineId) {
+    currentPipelineId = parseInt(pipelineId);
+    renderCRM();
+    renderPipeline();
+    if (document.getElementById('view-settings') &&
+        !document.getElementById('view-settings').classList.contains('hidden')) {
+        renderFunnelStages();
+    }
 }
 
 
@@ -2609,16 +2752,31 @@ function renderFunnelStages() {
         salvar({ stages: db.stages });
     }
 
-    container.innerHTML = db.stages.map((stage, idx) => {
-        const isProtected = stage.key === 'fechado' || stage.key === 'prospect';
-        const deleteBtn = isProtected ? 
-            `<span class="text-zinc-600 font-mono text-[9px] uppercase tracking-wider select-none">[ Protegido ]</span>` : 
+    renderGerenciadorFunis();
+
+    const etapas = stagesDoFunil(currentPipelineId);
+    const funil = pipelineAtual();
+
+    if (etapas.length === 0) {
+        container.innerHTML = `<div class="py-8 text-center text-zinc-500 font-mono text-xs border border-zinc-800 rounded-lg">
+            O funil "${escapeHtml(funil.name)}" ainda não tem etapas. Crie a primeira abaixo.
+        </div>`;
+        return;
+    }
+
+    container.innerHTML = etapas.map((stage, idx) => {
+        // Primeira e última etapa sustentam a entrada e o fechamento do funil —
+        // antes a proteção era pelas chaves 'prospect'/'fechado', que só existem
+        // no funil comercial.
+        const isProtected = idx === 0 || idx === etapas.length - 1;
+        const deleteBtn = isProtected ?
+            `<span class="text-zinc-600 font-mono text-[9px] uppercase tracking-wider select-none" title="Entrada e fechamento do funil não podem ser removidos">[ Protegido ]</span>` :
             `<button onclick="deleteStage('${stage.key}')" class="text-red-500 hover:text-red-400 font-mono text-[9px] uppercase tracking-wider select-none">[ Excluir ]</button>`;
-        
-        const renameAction = isProtected ? '' : `<button onclick="renameStagePrompt('${stage.key}')" class="text-cyan-400 hover:text-cyan-300 font-mono text-[9px] uppercase mr-2">[ Renomear ]</button>`;
-        
+
+        const renameAction = `<button onclick="renameStagePrompt('${stage.key}')" class="text-cyan-400 hover:text-cyan-300 font-mono text-[9px] uppercase mr-2">[ Renomear ]</button>`;
+
         const upBtn = idx > 0 ? `<button onclick="moveStageOrder('${stage.key}', -1)" class="text-zinc-400 hover:text-white font-mono text-[10px] font-bold px-1 select-none">▲</button>` : `<span class="text-zinc-700 font-mono text-[10px] px-1 select-none">▲</span>`;
-        const downBtn = idx < db.stages.length - 1 ? `<button onclick="moveStageOrder('${stage.key}', 1)" class="text-zinc-400 hover:text-white font-mono text-[10px] font-bold px-1 select-none">▼</button>` : `<span class="text-zinc-700 font-mono text-[10px] px-1 select-none">▼</span>`;
+        const downBtn = idx < etapas.length - 1 ? `<button onclick="moveStageOrder('${stage.key}', 1)" class="text-zinc-400 hover:text-white font-mono text-[10px] font-bold px-1 select-none">▼</button>` : `<span class="text-zinc-700 font-mono text-[10px] px-1 select-none">▼</span>`;
 
         return `
             <div class="flex items-center justify-between bg-slate-900/40 border border-zinc-900 p-3 rounded-lg">
@@ -2628,8 +2786,8 @@ function renderFunnelStages() {
                         ${downBtn}
                     </div>
                     <div>
-                        <span class="status-badge ${stage.colorClass}">${stage.label}</span>
-                        <span class="text-[9px] font-mono text-zinc-500 ml-2">(Chave: ${stage.key})</span>
+                        <span class="status-badge ${stage.colorClass}">${escapeHtml(stage.label)}</span>
+                        <span class="text-[9px] font-mono text-zinc-500 ml-2">(Chave: ${escapeHtml(stage.key)})</span>
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
@@ -2641,6 +2799,120 @@ function renderFunnelStages() {
     }).join('');
 }
 
+// Painel de funis nos Ajustes: escolher qual editar, criar, renomear e excluir.
+function renderGerenciadorFunis() {
+    const alvo = document.getElementById('funnel-pipelines-manager');
+    if (!alvo) return;
+
+    const funis = listaPipelines();
+    const cards = funis.map(p => {
+        const ativo = p.id === currentPipelineId;
+        const qtdEtapas = stagesDoFunil(p.id).length;
+        const qtdLeads = leadsDoFunil(p.id, db.leads).length;
+        const acoes = p.isDefault
+            ? `<span class="font-mono text-[9px] text-zinc-600 uppercase" title="O funil comercial é compartilhado por todos e não pode ser removido">[ Padrão ]</span>`
+            : `<button onclick="event.stopPropagation(); renomearFunil(${p.id})" class="font-mono text-[9px] text-cyan-400 hover:text-cyan-300 uppercase mr-2">[ Renomear ]</button>
+               <button onclick="event.stopPropagation(); excluirFunil(${p.id})" class="font-mono text-[9px] text-red-500 hover:text-red-400 uppercase">[ Excluir ]</button>`;
+
+        return `<div onclick="setPipelineAtual(${p.id})"
+            class="flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${ativo ? 'bg-cyan-500/10 border-cyan-500/40' : 'bg-slate-900/40 border-zinc-900 hover:border-zinc-700'}">
+            <div>
+                <div class="font-sans font-semibold text-sm ${ativo ? 'text-cyan-300' : 'text-zinc-200'}">${escapeHtml(p.name)}</div>
+                <div class="font-mono text-[9px] text-zinc-500 mt-0.5">${qtdEtapas} etapa(s) · ${qtdLeads} lead(s)</div>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">${acoes}</div>
+        </div>`;
+    }).join('');
+
+    alvo.innerHTML = `<div class="space-y-2">${cards}</div>
+        <div class="flex gap-2 mt-3">
+            <input type="text" id="novo-funil-nome" placeholder="Nome do novo funil"
+                class="flex-1 bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 text-xs font-sans focus:outline-none focus:border-cyan-500">
+            <button type="button" onclick="criarFunil()"
+                class="bg-cyan-500 hover:bg-cyan-400 text-black font-bold px-4 py-2 rounded font-mono text-[10px] uppercase transition-colors whitespace-nowrap">
+                + Criar funil
+            </button>
+        </div>`;
+}
+
+function criarFunil() {
+    const input = document.getElementById('novo-funil-nome');
+    const nome = (input?.value || '').trim();
+    if (!nome) { alert('Informe o nome do funil.'); return; }
+    if (listaPipelines().some(p => p.name.toLowerCase() === nome.toLowerCase())) {
+        alert('Já existe um funil com esse nome.');
+        return;
+    }
+
+    const novoId = Math.max(...listaPipelines().map(p => p.id)) + 1;
+    const novaOrdem = Math.max(...listaPipelines().map(p => p.order || 0)) + 1;
+    const funil = { id: novoId, name: nome, order: novaOrdem, isDefault: false };
+    db.pipelines.push(funil);
+
+    // Todo funil nasce com entrada e fechamento; sem isso não há para onde
+    // arrastar um lead nem como marcá-lo concluído.
+    const prefixo = _prefixoDeFunil(nome, novoId);
+    const etapasIniciais = [
+        { key: `${prefixo}_entrada`, label: 'Entrada', order: 1, colorClass: 'badge-blue', pipelineId: novoId },
+        { key: `${prefixo}_concluido`, label: 'Concluído', order: 2, colorClass: 'badge-emerald', pipelineId: novoId },
+    ];
+    db.stages.push(...etapasIniciais);
+
+    salvar({ pipelines: [funil], stages: etapasIniciais });
+    logSystem(`Novo funil criado: ${nome}`);
+    if (input) input.value = '';
+
+    setPipelineAtual(novoId);
+    renderFunnelStages();
+}
+
+// Prefixo curto e único para as chaves de etapa do funil, já que "key" é a
+// chave primária global de stages.
+function _prefixoDeFunil(nome, id) {
+    const base = nome.toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]/g, '')
+        .slice(0, 6);
+    return (base || 'funil') + id;
+}
+
+function renomearFunil(pipelineId) {
+    const funil = listaPipelines().find(p => p.id === pipelineId);
+    if (!funil) return;
+    const novo = prompt('Novo nome do funil:', funil.name);
+    if (!novo || !novo.trim()) return;
+    funil.name = novo.trim();
+    salvar({ pipelines: [funil] });
+    logSystem(`Funil renomeado para: ${funil.name}`);
+    renderFunnelStages();
+    renderCRM();
+}
+
+function excluirFunil(pipelineId) {
+    const funil = listaPipelines().find(p => p.id === pipelineId);
+    if (!funil) return;
+    if (funil.isDefault) { alert('O funil padrão não pode ser excluído.'); return; }
+
+    const leads = leadsDoFunil(pipelineId, db.leads);
+    if (leads.length > 0) {
+        alert(`Não é possível excluir "${funil.name}": há ${leads.length} lead(s) nele. Mova-os para outro funil primeiro.`);
+        return;
+    }
+    if (!confirm(`Excluir o funil "${funil.name}" e as etapas dele?`)) return;
+
+    const etapas = stagesDoFunil(pipelineId);
+    db.stages = db.stages.filter(s => (s.pipelineId || 1) !== pipelineId);
+    db.pipelines = db.pipelines.filter(p => p.id !== pipelineId);
+
+    // O banco apaga as etapas em cascata, mas o funil precisa sair explicitamente.
+    remover('pipelines', 'id', pipelineId);
+    etapas.forEach(s => remover('stages', 'key', s.key));
+
+    logSystem(`Funil excluído: ${funil.name}`);
+    setPipelineAtual(listaPipelines()[0].id);
+    renderFunnelStages();
+}
+
 function createNewStage(event) {
     event.preventDefault();
     const labelInput = document.getElementById('new-stage-label');
@@ -2649,31 +2921,32 @@ function createNewStage(event) {
 
     const label = labelInput.value.trim();
     const colorClass = colorSelect.value;
-
     if (!label) return;
 
-    const key = label.toLowerCase()
+    const base = label.toLowerCase()
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         .replace(/[^a-z0-9]/g, '_')
         .replace(/_+/g, '_')
         .trim();
 
-    if (!key || db.stages.some(s => s.key === key)) {
-        alert('Já existe uma etapa com nome semelhante. Escolha outro nome.');
+    // "key" e chave primaria global de stages, entao etapas de funis diferentes
+    // nao podem colidir: funil nao-padrao recebe prefixo proprio.
+    const funil = pipelineAtual();
+    const key = funil.isDefault ? base : `${_prefixoDeFunil(funil.name, funil.id)}_${base}`;
+
+    if (!base || db.stages.some(s => s.key === key)) {
+        alert('Ja existe uma etapa com nome semelhante neste funil. Escolha outro nome.');
         return;
     }
 
-    const nextOrder = db.stages.length > 0 ? Math.max(...db.stages.map(s => s.order)) + 1 : 1;
+    const doFunil = stagesDoFunil(currentPipelineId);
+    const nextOrder = doFunil.length > 0 ? Math.max(...doFunil.map(s => s.order)) + 1 : 1;
 
-    db.stages.push({
-        key: key,
-        label: label,
-        order: nextOrder,
-        colorClass: colorClass
-    });
+    const novaEtapa = { key, label, order: nextOrder, colorClass, pipelineId: currentPipelineId };
+    db.stages.push(novaEtapa);
 
-    salvar({ stages: db.stages });
-    logSystem(`Nova etapa do funil criada: ${label} (Chave: ${key})`);
+    salvar({ stages: [novaEtapa] });
+    logSystem(`Nova etapa criada no funil ${funil.name}: ${label}`);
 
     labelInput.value = '';
     colorSelect.selectedIndex = 0;
@@ -2714,22 +2987,22 @@ function renameStagePrompt(stageKey) {
 }
 
 function moveStageOrder(stageKey, direction) {
-    const idx = db.stages.findIndex(s => s.key === stageKey);
+    // Reordena dentro do proprio funil: antes mexia no array global, o que
+    // embaralhava a ordem das etapas dos outros funis.
+    const etapas = stagesDoFunil(currentPipelineId);
+    const idx = etapas.findIndex(s => s.key === stageKey);
     if (idx === -1) return;
 
-    const targetIdx = idx + direction;
-    if (targetIdx < 0 || targetIdx >= db.stages.length) return;
+    const alvo = idx + direction;
+    if (alvo < 0 || alvo >= etapas.length) return;
 
-    const temp = db.stages[idx];
-    db.stages[idx] = db.stages[targetIdx];
-    db.stages[targetIdx] = temp;
+    const tmp = etapas[idx];
+    etapas[idx] = etapas[alvo];
+    etapas[alvo] = tmp;
+    etapas.forEach((s, i) => { s.order = i + 1; });
 
-    db.stages.forEach((s, index) => {
-        s.order = index + 1;
-    });
-
-    salvar({ stages: db.stages });
-    logSystem(`Ordem das etapas do funil alterada.`);
+    salvar({ stages: etapas });
+    logSystem('Ordem das etapas do funil alterada.');
     renderFunnelStages();
     renderCRM();
 }
@@ -2737,12 +3010,17 @@ function moveStageOrder(stageKey, direction) {
 // =================== PIPELINE PYRAMID VIEW ===================
 function renderPipeline() {
     const visibleUserIds = getVisibleUserIds();
-    const visibleLeads = db.leads.filter(l => visibleUserIds.includes(l.agentId));
 
     // Ensure stages
     if (!db.stages || db.stages.length === 0) return;
 
-    const stages = db.stages;
+    renderSeletorFunil();
+
+    const stages = stagesDoFunil(currentPipelineId);
+    if (stages.length === 0) return;
+
+    const visibleLeads = leadsDoFunil(currentPipelineId,
+        db.leads.filter(l => visibleUserIds.includes(l.agentId)));
 
     // Calculate data per stage
     const stageData = stages.map((stage, idx) => {
@@ -2759,7 +3037,8 @@ function renderPipeline() {
     });
 
     // Sum only active stages (excluding 'fechado') for totals
-    const activeStageData = stageData.filter(s => s.key !== 'fechado');
+    const chaveFinal = _chaveEstagioFinal(currentPipelineId);
+    const activeStageData = stageData.filter(s => s.key !== chaveFinal);
     const grandTotalValue = activeStageData.reduce((acc, s) => acc + s.totalValue, 0);
     const grandTotalLeads = activeStageData.reduce((acc, s) => acc + s.leadsCount, 0);
     const avgTicket = grandTotalLeads > 0 ? grandTotalValue / grandTotalLeads : 0;
@@ -2805,7 +3084,7 @@ function renderPipeline() {
         const widthPercent = totalStages === 1 ? 100 : 100 - (idx * (65 / (totalStages - 1)));
         
         let percentageLabel = '';
-        if (stage.key === 'fechado') {
+        if (stage.key === _chaveEstagioFinal(currentPipelineId)) {
             percentageLabel = 'Histórico';
         } else {
             const percentage = grandTotalValue > 0 ? (stage.totalValue / grandTotalValue * 100).toFixed(1) : '0.0';
@@ -2853,7 +3132,7 @@ function renderPipeline() {
         const visibleUsers = db.users.filter(u => visibleUserIds.includes(u.id) && (u.role === 'agente' || u.role === 'lideranca' || u.role === 'diretoria' || u.role === 'admin'));
         
         // Active stage keys (excluding 'fechado')
-        const activeStageKeys = stages.map(s => s.key).filter(k => k !== 'fechado');
+        const activeStageKeys = stages.map(s => s.key).filter(k => k !== _chaveEstagioFinal(currentPipelineId));
         // Leads in active stages
         const activeLeads = visibleLeads.filter(l => activeStageKeys.includes(l.status));
         
@@ -2915,7 +3194,7 @@ function renderPipeline() {
 
         tableBody.innerHTML = stageData.map(stage => {
             let percentageLabel = '';
-            if (stage.key === 'fechado') {
+            if (stage.key === _chaveEstagioFinal(currentPipelineId)) {
                 percentageLabel = 'Histórico';
             } else {
                 const percentage = grandTotalValue > 0 ? (stage.totalValue / grandTotalValue * 100).toFixed(1) : '0.0';
@@ -3014,6 +3293,11 @@ window.deleteStage = deleteStage;
 window.renameStagePrompt = renameStagePrompt;
 window.moveStageOrder = moveStageOrder;
 window.renderPipeline = renderPipeline;
+window.setPipelineAtual = setPipelineAtual;
+window.onTrocaFunilNoModal = onTrocaFunilNoModal;
+window.criarFunil = criarFunil;
+window.renomearFunil = renomearFunil;
+window.excluirFunil = excluirFunil;
 
 // ================= TELA DE LOGIN & SESSÃO LOGIC =================
 function showLoginScreen() {
@@ -3101,6 +3385,7 @@ async function loadDataStoreFromCloud() {
         const [
             rUsers,
             rProducts,
+            rPipelines,
             rLeads,
             rClients,
             rStages,
@@ -3109,6 +3394,7 @@ async function loadDataStoreFromCloud() {
         ] = await Promise.all([
             supabaseClient.from('users').select('*'),
             supabaseClient.from('products').select('*'),
+            supabaseClient.from('pipelines').select('*'),
             supabaseClient.from('leads').select('*'),
             supabaseClient.from('clients').select('*'),
             supabaseClient.from('stages').select('*'),
@@ -3118,6 +3404,9 @@ async function loadDataStoreFromCloud() {
 
         if (rUsers.error) throw rUsers.error;
         if (rProducts.error) throw rProducts.error;
+        // pipelines pode nao existir em banco ainda nao migrado: cai no padrao.
+        const pipelinesCloud = (rPipelines && !rPipelines.error && rPipelines.data && rPipelines.data.length)
+            ? rPipelines.data : _pipelinesPadrao();
         if (rLeads.error) throw rLeads.error;
         if (rClients.error) throw rClients.error;
         if (rStages.error) throw rStages.error;
@@ -3133,6 +3422,7 @@ async function loadDataStoreFromCloud() {
         db = {
             users: rUsers.data || [],
             products: rProducts.data || [],
+            pipelines: pipelinesCloud,
             leads: rLeads.data || [],
             clients: rClients.data || [],
             stages: rStages.data || [],

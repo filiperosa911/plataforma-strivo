@@ -1,5 +1,22 @@
 // STRIVO PLATFORM // INITIAL MOCK DATA DEFINITIONS
 const INITIAL_MOCK_DATA = {
+    // Funis: o Comercial e o padrao compartilhado; Especialistas existe para
+    // demonstrar que funis podem ter etapas de natureza totalmente diferente.
+    pipelines: [
+        { id: 1, name: "Comercial", order: 1, isDefault: true },
+        { id: 2, name: "Especialistas", order: 2, isDefault: false }
+    ],
+    stages: [
+        { key: "prospect", label: "Prospect", order: 1, colorClass: "badge-blue", pipelineId: 1 },
+        { key: "contato", label: "Contato", order: 2, colorClass: "badge-purple", pipelineId: 1 },
+        { key: "proposta", label: "Proposta", order: 3, colorClass: "badge-amber", pipelineId: 1 },
+        { key: "fechado", label: "Fechado", order: 4, colorClass: "badge-emerald", pipelineId: 1 },
+        { key: "esp_diagnostico", label: "Diagnóstico", order: 1, colorClass: "badge-blue", pipelineId: 2 },
+        { key: "esp_analise", label: "Análise de Carteira", order: 2, colorClass: "badge-cyan", pipelineId: 2 },
+        { key: "esp_proposta", label: "Proposta Técnica", order: 3, colorClass: "badge-purple", pipelineId: 2 },
+        { key: "esp_implantacao", label: "Implantação", order: 4, colorClass: "badge-amber", pipelineId: 2 },
+        { key: "esp_acompanhamento", label: "Acompanhamento", order: 5, colorClass: "badge-emerald", pipelineId: 2 }
+    ],
     users: [
         { id: 1, name: "Filipe Rosa", role: "admin", email: "filipe@vertic.com", parentId: null, username: "filipe.rosa", status: "active" },
         { id: 2, name: "Diogo Wunsch", role: "diretoria", email: "diogo@strivo.com", parentId: null, username: "diogo.wunsch", status: "active" },

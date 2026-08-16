@@ -39,12 +39,29 @@ CREATE TABLE IF NOT EXISTS "products" (
 -- Habilitar RLS para products
 ALTER TABLE "products" ENABLE ROW LEVEL SECURITY;
 
--- 3. TABELA DE ESTÁGIOS DO FUNIL CRM
+-- 3. TABELA DE FUNIS (PIPELINES)
+-- O CRM começou com um funil único e fixo. O cliente pediu funis distintos com
+-- etapas próprias (comercial, especialistas, estruturação de fundo).
+CREATE TABLE IF NOT EXISTS "pipelines" (
+    "id" BIGINT PRIMARY KEY,
+    "name" TEXT NOT NULL,
+    "order" INT NOT NULL DEFAULT 1,
+    -- O funil padrão é o comercial, compartilhado por todos: foi a regra que o
+    -- cliente definiu ("um funil que todos utilizem o mesmo"). Não é excluível.
+    "isDefault" BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+ALTER TABLE "pipelines" ENABLE ROW LEVEL SECURITY;
+
+-- 3b. TABELA DE ESTÁGIOS DO FUNIL CRM
+-- "key" segue única globalmente (e não por funil) para preservar a FK de
+-- leads.status. Etapas de funis novos recebem prefixo na criação.
 CREATE TABLE IF NOT EXISTS "stages" (
     "key" TEXT PRIMARY KEY,
     "label" TEXT NOT NULL,
     "order" INT NOT NULL,
-    "colorClass" TEXT NOT NULL
+    "colorClass" TEXT NOT NULL,
+    "pipelineId" BIGINT NOT NULL DEFAULT 1 REFERENCES "pipelines"("id") ON DELETE CASCADE
 );
 
 -- Habilitar RLS para stages
@@ -59,6 +76,7 @@ CREATE TABLE IF NOT EXISTS "leads" (
     "source" TEXT,
     "extraInfo" TEXT,
     "status" TEXT NOT NULL REFERENCES "stages"("key") DEFAULT 'prospect',
+    "pipelineId" BIGINT NOT NULL DEFAULT 1 REFERENCES "pipelines"("id"),
     "productId" BIGINT REFERENCES "products"("id") ON DELETE SET NULL,
     "agentId" BIGINT NOT NULL REFERENCES "users"("id"),
     "leaderId" BIGINT REFERENCES "users"("id"),
@@ -231,6 +249,27 @@ CREATE POLICY "Edição de produtos por diretoria" ON "products" FOR UPDATE USIN
 );
 
 CREATE POLICY "Deleção de produtos por diretoria" ON "products" FOR DELETE USING (
+    get_my_role() = ANY (ARRAY['diretoria', 'admin'])
+);
+
+
+-- Regras para a tabela PIPELINES
+DROP POLICY IF EXISTS "Leitura de funis autenticados" ON "pipelines";
+DROP POLICY IF EXISTS "Inserção de funis por diretoria" ON "pipelines";
+DROP POLICY IF EXISTS "Edição de funis por diretoria" ON "pipelines";
+DROP POLICY IF EXISTS "Deleção de funis por diretoria" ON "pipelines";
+
+CREATE POLICY "Leitura de funis autenticados" ON "pipelines" FOR SELECT USING (auth.uid() IS NOT NULL);
+
+CREATE POLICY "Inserção de funis por diretoria" ON "pipelines" FOR INSERT WITH CHECK (
+    get_my_role() = ANY (ARRAY['diretoria', 'admin'])
+);
+
+CREATE POLICY "Edição de funis por diretoria" ON "pipelines" FOR UPDATE USING (
+    get_my_role() = ANY (ARRAY['diretoria', 'admin'])
+);
+
+CREATE POLICY "Deleção de funis por diretoria" ON "pipelines" FOR DELETE USING (
     get_my_role() = ANY (ARRAY['diretoria', 'admin'])
 );
 

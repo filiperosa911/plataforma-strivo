@@ -241,7 +241,8 @@
                         <p class="text-zinc-500 text-xs mt-1 font-mono">Organização de leads e controle de participações
                             societárias</p>
                     </div>
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <div id="crm-pipeline-selector"></div>
                         <div class="crm-view-toggle">
                             <button id="toggle-view-kanban" onclick="setCRMView('kanban')"
                                 class="view-toggle-btn active">📋 Kanban</button>
@@ -493,6 +494,7 @@
                         <p class="text-zinc-500 text-xs mt-1 font-mono">Visão consolidada do potencial de captação por
                             etapa do funil</p>
                     </div>
+                    <div id="pipeline-view-selector"></div>
                     <div class="font-mono text-[10px] text-zinc-500 bg-zinc-900/50 border border-zinc-800 px-3 py-1 rounded"
                         id="pipeline-date-label">
                         ATUALIZADO EM TEMPO REAL
@@ -614,6 +616,16 @@
                         <p class="text-zinc-500 text-xs mt-1 font-mono">Personalize as etapas do pipeline de captação
                         </p>
                     </div>
+                </div>
+
+                <!-- Gerenciador de funis: escolher qual editar, criar, renomear, excluir -->
+                <div class="glass-card p-6 space-y-4 mb-8">
+                    <div>
+                        <span class="font-mono text-[9px] text-zinc-400 uppercase tracking-wider block">[ FUNIS ]</span>
+                        <p class="text-[10px] font-mono text-zinc-600 mt-1">Cada funil tem etapas próprias. O funil
+                            padrão é compartilhado por todo o time; clique em um funil para editar as etapas dele.</p>
+                    </div>
+                    <div id="funnel-pipelines-manager"></div>
                 </div>
 
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
@@ -759,6 +771,12 @@
                             <select id="lead-modal-agent"
                                 class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 focus:outline-none focus:border-cyan-500">
                                 <!-- Options filled by JS -->
+                            </select>
+                        </div>
+                        <div class="space-y-1">
+                            <label for="lead-modal-pipeline" class="text-zinc-400 font-semibold">Funil:</label>
+                            <select id="lead-modal-pipeline" onchange="onTrocaFunilNoModal(this.value)"
+                                class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 font-sans focus:outline-none focus:border-cyan-500">
                             </select>
                         </div>
                         <div class="space-y-1">
