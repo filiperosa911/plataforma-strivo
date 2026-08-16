@@ -2775,22 +2775,14 @@ async function attemptLogin(event) {
         return;
     }
 
-    // Mapeamento especial para sem acentos e normalização simples
-    const normalizedUsernameInput = usernameInput.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
-    const user = db.users.find(u => {
-        if (!u.username) return false;
-        const normalizedDbUsername = u.username.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-        return normalizedDbUsername === normalizedUsernameInput && u.password === passwordInput;
-    });
-
-    if (user) {
-        sessionStorage.setItem('strivo_logged_user_id', user.id);
-        errorMsg.classList.add('hidden');
-        initApp(); // Reinicializa com a nova sessão do usuário
-    } else {
-        showLoginError();
-    }
+    // Sem nuvem não há como autenticar. O fallback antigo comparava a senha
+    // digitada com um campo em texto puro do mock-data.js — arquivo servido
+    // publicamente junto com o site, ou seja, publicava as credenciais de todo
+    // mundo. O campo foi removido e este caminho agora recusa o acesso em vez
+    // de autenticar contra segredo exposto.
+    console.warn('Login indisponível: sem conexão com o servidor de autenticação.');
+    errorMsg.innerText = 'Sem conexão com o servidor. Tente novamente em instantes.';
+    showLoginError();
 }
 
 async function logoutUser(event) {
@@ -2802,22 +2794,9 @@ async function logoutUser(event) {
     }
 }
 
-function toggleCredentialsPanel() {
-    const panel = document.getElementById('credentials-panel');
-    const arrow = document.getElementById('credentials-arrow');
-    if (panel.classList.contains('hidden')) {
-        panel.classList.remove('hidden');
-        arrow.innerText = '▲';
-    } else {
-        panel.classList.add('hidden');
-        arrow.innerText = '▼';
-    }
-}
-
 // Global Exports para Login
 window.attemptLogin = attemptLogin;
 window.logoutUser = logoutUser;
-window.toggleCredentialsPanel = toggleCredentialsPanel;
 
 // ==================== SUPABASE CLOUD SYNC & CONFIG ====================
 async function loadDataStoreFromCloud() {

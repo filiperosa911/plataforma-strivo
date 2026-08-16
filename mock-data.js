@@ -1,14 +1,14 @@
 // STRIVO PLATFORM // INITIAL MOCK DATA DEFINITIONS
 const INITIAL_MOCK_DATA = {
     users: [
-        { id: 1, name: "Filipe Rosa", role: "diretoria", email: "filipe@vertic.com", parentId: null, username: "filipe.rosa", password: "FilipeStrivo", status: "active" },
-        { id: 2, name: "Diogo Wunsch", role: "diretoria", email: "diogo@strivo.com", parentId: null, username: "diogo.wunsch", password: "DiogoStrivo", status: "active" },
-        { id: 3, name: "Gustav Gorski", role: "diretoria", email: "gustav@strivo.com", parentId: null, username: "gustav.gorski", password: "GustavStrivo", status: "active" },
-        { id: 4, name: "Thiago Vicente", role: "diretoria", email: "thiago@strivo.com", parentId: null, username: "thiago.vicente", password: "ThiagoStrivo", status: "active" },
-        { id: 5, name: "Celso Pimenta", role: "lideranca", email: "celso@strivo.com", parentId: 2, username: "celso.pimenta", password: "CelsoStrivo", status: "active" },
-        { id: 6, name: "EQR", role: "agente", email: "eqr@strivo.com", parentId: 5, username: "eqr", password: "EQRStrivo", status: "active" },
-        { id: 7, name: "Vex Capital", role: "agente", email: "vex@strivo.com", parentId: 5, username: "vex.capital", password: "VexStrivo", status: "active" },
-        { id: 8, name: "S2 Invest", role: "agente", email: "s2@strivo.com", parentId: 5, username: "s2.invest", password: "S2Strivo", status: "active" }
+        { id: 1, name: "Filipe Rosa", role: "diretoria", email: "filipe@vertic.com", parentId: null, username: "filipe.rosa", status: "active" },
+        { id: 2, name: "Diogo Wunsch", role: "diretoria", email: "diogo@strivo.com", parentId: null, username: "diogo.wunsch", status: "active" },
+        { id: 3, name: "Gustav Gorski", role: "diretoria", email: "gustav@strivo.com", parentId: null, username: "gustav.gorski", status: "active" },
+        { id: 4, name: "Thiago Vicente", role: "diretoria", email: "thiago@strivo.com", parentId: null, username: "thiago.vicente", status: "active" },
+        { id: 5, name: "Celso Pimenta", role: "lideranca", email: "celso@strivo.com", parentId: 2, username: "celso.pimenta", status: "active" },
+        { id: 6, name: "EQR", role: "agente", email: "eqr@strivo.com", parentId: 5, username: "eqr", status: "active" },
+        { id: 7, name: "Vex Capital", role: "agente", email: "vex@strivo.com", parentId: 5, username: "vex.capital", status: "active" },
+        { id: 8, name: "S2 Invest", role: "agente", email: "s2@strivo.com", parentId: 5, username: "s2.invest", status: "active" }
     ],
     products: [
         { id: 1, name: "Strivo Yield 40 FIF", taxAdm: 1.2, feeCap: 0.0, splitStrivo: 60, splitLider: 15, splitAgente: 25, cnpj: "46.847.516/0001-77", administrator: "VORTX", investorType: "Qualificado", performanceFee: 20.0, benchmark: "CDI+", status: "active" },
