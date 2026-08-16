@@ -668,11 +668,14 @@
                         <h2 class="text-2xl font-extrabold tracking-tight text-white font-sans">Agenda</h2>
                         <p class="text-zinc-500 text-xs mt-1 font-mono">Próximos passos e tarefas de todos os leads</p>
                     </div>
-                    <div class="flex items-center gap-1.5 bg-slate-900 border border-zinc-800 rounded-lg p-1">
-                        <button type="button" id="agenda-view-week-btn" onclick="setAgendaViewMode('week')"
-                            class="font-mono text-[10px] uppercase tracking-wider px-3 py-1.5 rounded transition-colors">Semana</button>
-                        <button type="button" id="agenda-view-month-btn" onclick="setAgendaViewMode('month')"
-                            class="font-mono text-[10px] uppercase tracking-wider px-3 py-1.5 rounded transition-colors">Mês</button>
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <div id="agenda-filtro-agente"></div>
+                        <div class="flex items-center gap-1.5 bg-slate-900 border border-zinc-800 rounded-lg p-1">
+                            <button type="button" id="agenda-view-week-btn" onclick="setAgendaViewMode('week')"
+                                class="font-mono text-[10px] uppercase tracking-wider px-3 py-1.5 rounded transition-colors">Semana</button>
+                            <button type="button" id="agenda-view-month-btn" onclick="setAgendaViewMode('month')"
+                                class="font-mono text-[10px] uppercase tracking-wider px-3 py-1.5 rounded transition-colors">Mês</button>
+                        </div>
                     </div>
                 </div>
                 <div id="agenda-week-strip" class="flex gap-2 overflow-x-auto pb-2 mb-6" style="min-height:60px">
@@ -806,6 +809,17 @@
                             <div class="flex gap-1.5 flex-wrap">
                                 <input type="date" id="new-task-date"
                                     class="bg-slate-900 border border-zinc-800 rounded p-1 text-zinc-300 text-xs font-mono focus:outline-none focus:border-cyan-500 flex-1 min-w-[100px]">
+                                <input type="time" id="new-task-time"
+                                    class="bg-slate-900 border border-zinc-800 rounded p-1 text-zinc-300 text-xs font-mono focus:outline-none focus:border-cyan-500">
+                                <select id="new-task-type"
+                                    class="bg-slate-900 border border-zinc-800 rounded p-1 text-zinc-300 text-xs font-mono focus:outline-none focus:border-cyan-500">
+                                    <option value="tarefa">📌 Tarefa</option>
+                                    <option value="ligacao">📞 Ligação</option>
+                                    <option value="reuniao">🤝 Reunião</option>
+                                    <option value="email">✉️ E-mail</option>
+                                    <option value="material">📄 Material</option>
+                                    <option value="followup">🔁 Follow-up</option>
+                                </select>
                                 <select id="new-task-priority"
                                     class="bg-slate-900 border border-zinc-800 rounded p-1 text-zinc-300 text-xs font-mono focus:outline-none focus:border-cyan-500">
                                     <option value="1">P1 Urgente</option>

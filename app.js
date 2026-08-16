@@ -707,6 +707,15 @@ function renderCRM() {
                         codeBadge = `<div class="font-mono text-[9px] text-cyan-400 bg-cyan-950/40 border border-cyan-500/20 px-1.5 py-0.5 rounded mt-2 text-center uppercase tracking-wider">${lead.clientCode}</div>`;
                     }
 
+                    // Lead sem próximo passo agendado: sinaliza no card para não
+                    // esfriar sem ninguém notar. Não vale para a etapa final.
+                    let semAtividade = '';
+                    if (stage.key !== _chaveEstagioFinal() && !temProximaAtividade(lead)) {
+                        semAtividade = `<div class="flex items-center gap-1 mt-2 text-[8px] font-mono text-amber-500/90 bg-amber-950/30 border border-amber-800/40 rounded px-1.5 py-0.5" title="Nenhuma tarefa agendada para este lead">
+                            <span>⚠</span> SEM PRÓXIMO PASSO
+                        </div>`;
+                    }
+
                     // Create attachments and tasks icons or badges
                     let metaBadges = '';
                     if ((lead.attachments && lead.attachments.length > 0) || (lead.tasks && lead.tasks.length > 0)) {
@@ -727,14 +736,15 @@ function renderCRM() {
 
                     card.innerHTML = `
                         <div class="flex justify-between items-start">
-                            <h4 class="font-bold text-xs text-white leading-snug">${lead.name}</h4>
+                            <h4 class="font-bold text-xs text-white leading-snug">${escapeHtml(lead.name)}</h4>
                             ${splitText}
                         </div>
                         <div class="space-y-1 font-mono text-[9px] text-zinc-400">
-                            <div>PRODUTO: <span class="text-zinc-200">${product ? product.name : 'Indefinido'}</span></div>
+                            <div>PRODUTO: <span class="text-zinc-200">${escapeHtml(product ? product.name : 'Indefinido')}</span></div>
                             <div>VALOR: <span class="text-emerald-400 font-bold">${formatCurrency(lead.value)}</span></div>
-                            <div>ASSESSOR: <span class="text-zinc-200">${agent ? agent.name : 'N/A'}</span></div>
+                            <div>ASSESSOR: <span class="text-zinc-200">${escapeHtml(agent ? agent.name : 'N/A')}</span></div>
                         </div>
+                        ${semAtividade}
                         ${metaBadges}
                         <div class="flex justify-end gap-1.5 pt-1">
                             <button onclick="openLeadModal(${lead.id})" class="text-[9px] font-mono text-cyan-400 hover:text-cyan-300 transition-colors uppercase">[ Editar ]</button>
@@ -897,7 +907,7 @@ function openLeadModal(leadId) {
 
         // Reset tasks inputs
         document.getElementById('new-task-text').value = '';
-        document.getElementById('new-task-date').value = new Date().toISOString().split('T')[0];
+        document.getElementById('new-task-date').value = _dataLocalISO();
 
         // Enable and render tasks / attachments
         if (taskForm) taskForm.classList.remove('hidden');
@@ -1024,7 +1034,7 @@ function saveLead(event) {
             leaderId: leaderId,
             value: value,
             splits: [{ agentId: agentId, pct: 100 }],
-            createdDate: new Date().toISOString().split('T')[0],
+            createdDate: _dataLocalISO(),
             phone: phone,
             email: email,
             source: source,
@@ -1093,9 +1103,82 @@ const TASK_PRIORITY_CFG = {
     4: { border: '#52525b', bg: '' },
 };
 
+// Tipo da atividade. Antes toda tarefa era genérica, então a agenda não dizia
+// o que precisava ser feito — só quando. Os tipos seguem o vocabulário que o
+// cliente usou: ligação ("fazer religação"), reunião, material.
+const TASK_TYPE_CFG = {
+    ligacao:  { icone: '📞', rotulo: 'Ligação' },
+    reuniao:  { icone: '🤝', rotulo: 'Reunião' },
+    email:    { icone: '✉️', rotulo: 'E-mail' },
+    material: { icone: '📄', rotulo: 'Material' },
+    followup: { icone: '🔁', rotulo: 'Follow-up' },
+    tarefa:   { icone: '📌', rotulo: 'Tarefa' },
+};
+
+function tipoTarefa(task) {
+    return TASK_TYPE_CFG[task && task.type] || TASK_TYPE_CFG.tarefa;
+}
+
+// ----------------- AGENDA: DATAS E AGRUPAMENTO -----------------
+
+// AAAA-MM-DD no fuso de quem está usando. toISOString() devolve UTC: das 21h
+// em diante no horário de Brasília ele já retorna o dia seguinte, e a agenda
+// passava a tratar as tarefas de hoje como atrasadas.
+function _dataLocalISO(data) {
+    const d = data || new Date();
+    const mes = String(d.getMonth() + 1).padStart(2, '0');
+    const dia = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${mes}-${dia}`;
+}
+
+function _hojeISO() {
+    return _dataLocalISO();
+}
+
+// Diferença em dias inteiros entre uma data ISO e hoje. Negativo = passado.
+function _diasAte(dataISO) {
+    if (!dataISO) return null;
+    const [a, m, d] = dataISO.split('-').map(Number);
+    const alvo = new Date(a, m - 1, d);
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    return Math.round((alvo - hoje) / 86400000);
+}
+
+// Em que bloco da agenda a tarefa cai.
+function _bucketTarefa(dataISO) {
+    if (!dataISO) return 'sem-data';
+    const dias = _diasAte(dataISO);
+    if (dias < 0) return 'atrasada';
+    if (dias === 0) return 'hoje';
+    if (dias === 1) return 'amanha';
+    if (dias <= 7) return 'semana';
+    return 'depois';
+}
+
+// "venceu há 3 dias", "em 5 dias" — a tela antes não dizia nada disso, então
+// não dava para saber se algo estava atrasado desde ontem ou há um mês.
+function _rotuloPrazo(dataISO) {
+    const dias = _diasAte(dataISO);
+    if (dias === null) return '';
+    if (dias === 0) return 'hoje';
+    if (dias === 1) return 'amanhã';
+    if (dias === -1) return 'venceu ontem';
+    if (dias < 0) return `venceu há ${Math.abs(dias)} dias`;
+    return `em ${dias} dias`;
+}
+
+// Um lead "parado" é o que não tem nenhuma tarefa aberta daqui pra frente.
+// É o conceito de activity-based selling: negócio sem próximo passo agendado
+// é negócio que morre. Responde ao "fazer religação" que o cliente pediu.
+function temProximaAtividade(lead) {
+    const hoje = _hojeISO();
+    return (lead.tasks || []).some(t => !t.completed && t.dueDate && t.dueDate >= hoje);
+}
+
 function isOverdue(task) {
     if (!task.dueDate || task.completed) return false;
-    return task.dueDate < new Date().toISOString().split('T')[0];
+    return task.dueDate < _dataLocalISO();
 }
 
 function renderLeadTasks(leadId) {
@@ -1152,19 +1235,21 @@ function addCurrentLeadTask() {
     let taskDate = document.getElementById('new-task-date').value;
     const priority = parseInt(document.getElementById('new-task-priority')?.value || '3');
     const label = document.getElementById('new-task-label')?.value || '';
+    const type = document.getElementById('new-task-type')?.value || 'tarefa';
+    const dueTime = document.getElementById('new-task-time')?.value || '';
 
     if (!taskText) { alert('Por favor, descreva a tarefa.'); return; }
-    if (!taskDate) taskDate = new Date().toISOString().split('T')[0];
+    if (!taskDate) taskDate = _dataLocalISO();
 
     if (!lead.tasks) lead.tasks = [];
 
     const newTaskId = lead.tasks.length > 0 ? Math.max(...lead.tasks.map(t => t.id)) + 1 : 1;
-    lead.tasks.push({ id: newTaskId, text: taskText, description: '', dueDate: taskDate, dueTime: '', completed: false, priority, label, subtasks: [] });
+    lead.tasks.push({ id: newTaskId, text: taskText, description: '', dueDate: taskDate, dueTime, completed: false, priority, label, type, subtasks: [] });
 
     salvar({ leads: [lead] });
     logSystem(`Tarefa agendada para lead "${lead.name}": ${taskText}`);
     document.getElementById('new-task-text').value = '';
-    document.getElementById('new-task-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('new-task-date').value = _dataLocalISO();
     renderLeadTasks(leadId);
     renderCRM();
 }
@@ -1335,6 +1420,7 @@ let _agendaCalendarRef = new Date(); // mes/ano exibido na visao de mes
 function renderAgendaView() {
     try {
         _updateAgendaViewToggleUI();
+        _renderAgendaFiltroAgente();
         if (_agendaViewMode === 'month') {
             _renderAgendaMonthCalendar();
         } else {
@@ -1404,23 +1490,66 @@ function _renderAgendaWeekStrip() {
     const container = document.getElementById('agenda-week-strip');
     if (!container) return;
     const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = _dataLocalISO(today);
     const dayNames = ['D','S','T','Q','Q','S','S'];
-    const allTasks = db.leads.flatMap(l => (l.tasks || []).filter(t => !t.completed).map(t => t.dueDate));
+
+    // Quantas tarefas por dia, respeitando hierarquia e filtro — antes a tira
+    // usava db.leads inteiro e só marcava um pontinho, sem dizer quantas.
+    const porDia = {};
+    _agendaTarefasVisiveis()
+        .filter(t => !t.completed && t.dueDate)
+        .forEach(t => { porDia[t.dueDate] = (porDia[t.dueDate] || 0) + 1; });
+
     const days = Array.from({ length: 8 }, (_, i) => { const d = new Date(today); d.setDate(today.getDate() + i - 1); return d; });
     container.innerHTML = days.map(d => {
-        const ds = d.toISOString().split('T')[0];
+        const ds = _dataLocalISO(d);
         const isToday = ds === todayStr;
         const isSelected = ds === _agendaSelectedDate;
-        const hasTasks = allTasks.includes(ds);
+        const qtd = porDia[ds] || 0;
         let circleClass = isToday ? 'bg-rose-500 text-white' : 'bg-slate-900 border border-zinc-800 text-zinc-400';
         if (isSelected) circleClass += ' ring-2 ring-cyan-400';
-        return `<div class="flex flex-col items-center flex-shrink-0 w-10 gap-0.5 cursor-pointer" onclick="_selectAgendaDate('${ds}')">
+        const contador = qtd > 0
+            ? `<span class="min-w-[16px] h-4 px-1 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 font-mono text-[9px] flex items-center justify-center">${qtd}</span>`
+            : `<span class="h-4"></span>`;
+        return `<div class="flex flex-col items-center flex-shrink-0 w-11 gap-1 cursor-pointer group" onclick="_selectAgendaDate('${ds}')"
+                     title="${qtd} tarefa(s)">
             <span class="text-[9px] font-mono text-zinc-600">${dayNames[d.getDay()]}</span>
-            <div class="${circleClass} w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors">${d.getDate()}</div>
-            <div class="w-1.5 h-1.5 rounded-full ${hasTasks ? 'bg-cyan-500' : 'bg-transparent'}"></div>
+            <div class="${circleClass} w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors group-hover:border-cyan-600">${d.getDate()}</div>
+            ${contador}
         </div>`;
     }).join('');
+}
+
+// Filtro por assessor: a diretoria enxerga o time todo, e sem isso a agenda
+// vira uma lista longa onde não dá para ver a carga de cada um.
+function _renderAgendaFiltroAgente() {
+    const alvo = document.getElementById('agenda-filtro-agente');
+    if (!alvo) return;
+
+    const visibleIds = getVisibleUserIds();
+    const agentes = db.users
+        .filter(u => visibleIds.includes(u.id) && u.id !== currentUserId)
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+    // Só faz sentido quando a pessoa enxerga mais alguém além de si.
+    if (agentes.length === 0) { alvo.innerHTML = ''; return; }
+
+    const opcoes = [`<option value="">Todos os assessores</option>`]
+        .concat(db.users
+            .filter(u => visibleIds.includes(u.id))
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(u => `<option value="${u.id}" ${_agendaFiltroAgente === u.id ? 'selected' : ''}>${escapeHtml(u.name)}</option>`))
+        .join('');
+
+    alvo.innerHTML = `<select onchange="setAgendaFiltroAgente(this.value)"
+        class="bg-slate-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-zinc-300 font-mono text-[10px] focus:outline-none focus:border-cyan-500">
+        ${opcoes}
+    </select>`;
+}
+
+function setAgendaFiltroAgente(valor) {
+    _agendaFiltroAgente = valor ? parseInt(valor) : null;
+    renderAgendaView();
 }
 
 function _renderAgendaMonthCalendar() {
@@ -1428,7 +1557,7 @@ function _renderAgendaMonthCalendar() {
     if (!container) return;
     const year = _agendaCalendarRef.getFullYear();
     const month = _agendaCalendarRef.getMonth();
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = _dataLocalISO();
     const allTaskDates = db.leads.flatMap(l => (l.tasks || []).filter(t => !t.completed).map(t => t.dueDate));
 
     const firstOfMonth = new Date(year, month, 1);
@@ -1466,79 +1595,202 @@ function _renderAgendaMonthCalendar() {
     `;
 }
 
+// Assessor selecionado no filtro da agenda (null = todos que eu enxergo).
+let _agendaFiltroAgente = null;
+
+function _agendaTarefasVisiveis() {
+    const visibleIds = getVisibleUserIds();
+    return db.leads
+        .filter(l => visibleIds.includes(l.agentId))
+        .filter(l => !_agendaFiltroAgente || l.agentId === _agendaFiltroAgente)
+        .flatMap(l => (l.tasks || []).map(t => ({
+            ...t,
+            leadId: l.id,
+            leadName: l.name,
+            agentId: l.agentId
+        })));
+}
+
 function _renderAgendaGroups() {
     const container = document.getElementById('agenda-task-groups');
     if (!container) return;
-    const today = new Date().toISOString().split('T')[0];
-    const visibleIds = getVisibleUserIds();
-    const allTasks = db.leads
-        .filter(l => visibleIds.includes(l.agentId))
-        .flatMap(l => (l.tasks || []).map(t => ({ ...t, leadId: l.id, leadName: l.name })));
+
+    // Concluídas saem da agenda: ela é lista do que fazer, não histórico.
+    const pendentes = _agendaTarefasVisiveis().filter(t => !t.completed);
 
     if (_agendaSelectedDate) {
-        const dayTasks = allTasks.filter(t => t.dueDate === _agendaSelectedDate);
-        container.innerHTML = dayTasks.length
-            ? _agendaGroup(_fmtAgendaDate(_agendaSelectedDate), dayTasks, 'text-cyan-400')
-            : `<div class="py-16 text-center text-zinc-500 font-mono text-sm border border-zinc-800 rounded-xl">Nenhuma tarefa em ${_fmtAgendaDate(_agendaSelectedDate)}.</div>`;
+        const doDia = pendentes.filter(t => t.dueDate === _agendaSelectedDate);
+        container.innerHTML = doDia.length
+            ? _agendaGroup(_fmtAgendaDate(_agendaSelectedDate), doDia, 'dia')
+            : _agendaVazio(`Nenhuma tarefa em ${_fmtAgendaDate(_agendaSelectedDate)}.`);
         return;
     }
 
-    const overdue = allTasks.filter(t => t.dueDate && t.dueDate < today);
-    const todayTasks = allTasks.filter(t => t.dueDate === today);
-    const noDate = allTasks.filter(t => !t.dueDate);
-    const upcoming = allTasks.filter(t => t.dueDate && t.dueDate > today);
-    const byDate = upcoming.reduce((acc, t) => { (acc[t.dueDate] = acc[t.dueDate] || []).push(t); return acc; }, {});
+    const buckets = { atrasada: [], hoje: [], amanha: [], semana: [], depois: [], 'sem-data': [] };
+    pendentes.forEach(t => buckets[_bucketTarefa(t.dueDate)].push(t));
 
-    let html = '';
-    if (overdue.length) html += _agendaGroup('🔴 Atrasadas', overdue, 'text-red-400');
-    if (todayTasks.length) html += _agendaGroup(`📅 Hoje · ${_fmtAgendaDate(today)}`, todayTasks, 'text-cyan-400');
-    Object.entries(byDate).sort(([a],[b]) => a.localeCompare(b)).forEach(([date, tasks]) => {
-        html += _agendaGroup(_fmtAgendaDate(date), tasks, 'text-zinc-300');
-    });
-    if (noDate.length) html += _agendaGroup('Sem data', noDate, 'text-zinc-500');
-    if (!html) html = `<div class="py-16 text-center text-zinc-300 font-mono text-sm border border-zinc-800 rounded-xl">Nenhuma tarefa pendente.</div>`;
+    const blocos = [
+        ['atrasada', 'Atrasadas', 'atrasada'],
+        ['hoje', 'Hoje', 'hoje'],
+        ['amanha', 'Amanhã', 'normal'],
+        ['semana', 'Próximos 7 dias', 'normal'],
+        ['depois', 'Mais adiante', 'discreto'],
+        ['sem-data', 'Sem data definida', 'discreto'],
+    ];
+
+    let html = blocos
+        .filter(([chave]) => buckets[chave].length > 0)
+        .map(([chave, titulo, tom]) => _agendaGroup(titulo, buckets[chave], tom))
+        .join('');
+
+    html += _agendaLeadsParados();
+
+    if (!html) html = _agendaVazio('Nenhuma tarefa pendente. Agende o próximo passo de um lead pelo funil.');
     container.innerHTML = html;
 }
 
-function _agendaGroup(title, tasks, titleClass) {
-    const rows = [...tasks]
-        .sort((a, b) => (a.priority || 4) - (b.priority || 4))
+function _agendaVazio(mensagem) {
+    return `<div class="py-16 text-center text-zinc-500 font-mono text-sm border border-zinc-800 rounded-xl">${escapeHtml(mensagem)}</div>`;
+}
+
+// Bloco de leads sem próximo passo agendado — o que a agenda não mostrava e
+// era justamente o que fazia lead esfriar sem ninguém notar.
+function _agendaLeadsParados() {
+    if (_agendaSelectedDate) return '';
+
+    const visibleIds = getVisibleUserIds();
+    const stageFinal = _chaveEstagioFinal();
+    const parados = db.leads
+        .filter(l => visibleIds.includes(l.agentId))
+        .filter(l => !_agendaFiltroAgente || l.agentId === _agendaFiltroAgente)
+        .filter(l => l.status !== stageFinal)
+        .filter(l => !temProximaAtividade(l));
+
+    if (parados.length === 0) return '';
+
+    const linhas = parados.map(lead => {
+        const agente = db.users.find(u => u.id === lead.agentId);
+        return `<div class="flex items-center justify-between gap-3 py-2.5 border-b border-zinc-900/60 last:border-0">
+            <div class="min-w-0">
+                <p class="text-sm font-medium text-zinc-200 truncate">${escapeHtml(lead.name)}</p>
+                <p class="text-[9px] font-mono text-zinc-600 mt-0.5">${escapeHtml(agente ? agente.name : 'sem assessor')} · ${formatCurrency(lead.value)}</p>
+            </div>
+            <button type="button" onclick="openLeadModal(${lead.id})"
+                class="shrink-0 font-mono text-[9px] uppercase tracking-wider text-amber-400 hover:text-amber-300 border border-amber-800/50 hover:border-amber-600 rounded px-2 py-1 transition-colors">
+                Agendar
+            </button>
+        </div>`;
+    }).join('');
+
+    return `<div class="mt-8">
+        <div class="flex items-baseline gap-2 mb-3">
+            <span class="font-mono text-[10px] uppercase tracking-wider text-amber-400">⚠ Leads sem próximo passo</span>
+            <span class="font-mono text-[10px] text-zinc-600">${parados.length}</span>
+        </div>
+        <p class="text-[10px] font-mono text-zinc-600 mb-3">Sem tarefa agendada — risco de esfriar sem ninguém perceber.</p>
+        <div class="bg-slate-900 border border-amber-900/30 rounded-xl px-4 py-1">${linhas}</div>
+    </div>`;
+}
+
+const AGENDA_TOM = {
+    atrasada: { titulo: 'text-red-400', borda: 'border-red-900/40', marca: '⚠' },
+    hoje:     { titulo: 'text-cyan-400', borda: 'border-cyan-900/40', marca: '●' },
+    dia:      { titulo: 'text-cyan-400', borda: 'border-zinc-900', marca: '●' },
+    normal:   { titulo: 'text-zinc-300', borda: 'border-zinc-900', marca: '' },
+    discreto: { titulo: 'text-zinc-500', borda: 'border-zinc-900', marca: '' },
+};
+
+// Grupos que o usuário abriu por inteiro nesta sessão.
+let _agendaGruposAbertos = new Set();
+const AGENDA_LIMITE_GRUPO = 5;
+
+function toggleAgendaGrupo(chave) {
+    if (_agendaGruposAbertos.has(chave)) _agendaGruposAbertos.delete(chave);
+    else _agendaGruposAbertos.add(chave);
+    renderAgendaView();
+}
+
+function _agendaGroup(title, tasks, tom) {
+    const cfg = AGENDA_TOM[tom] || AGENDA_TOM.normal;
+    const atrasado = tom === 'atrasada';
+
+    const ordenadas = [...tasks].sort((a, b) => {
+        // Mais urgente primeiro; empate, quem vence antes.
+        const p = (a.priority || 4) - (b.priority || 4);
+        if (p !== 0) return p;
+        return (a.dueDate || '9999').localeCompare(b.dueDate || '9999');
+    });
+
+    // Um passivo de 14 atrasadas empurrava "Hoje" para fora da tela — o que
+    // precisa ser feito agora ficava escondido atrás do que já passou.
+    const chave = tom + '|' + title;
+    const aberto = _agendaGruposAbertos.has(chave);
+    const excedente = ordenadas.length - AGENDA_LIMITE_GRUPO;
+    const visiveis = aberto ? ordenadas : ordenadas.slice(0, AGENDA_LIMITE_GRUPO);
+
+    const rows = visiveis
         .map(task => {
             const pc = TASK_PRIORITY_CFG[task.priority || 4];
-            const doneClass = task.completed ? 'opacity-50' : '';
-            const textClass = task.completed ? 'line-through text-zinc-500' : 'text-zinc-200';
-            const labelHtml = task.label
-                ? `<span class="px-1.5 py-0.5 rounded-full text-[8px] font-mono border ${task.label === 'urgente' ? 'border-red-800/60 text-red-400' : 'border-blue-800/60 text-blue-400'}">${task.label}</span>`
+            const tipo = tipoTarefa(task);
+            const agente = db.users.find(u => u.id === task.agentId);
+
+            // Cor sozinha não comunica: o prazo vem escrito por extenso.
+            const prazo = task.dueDate ? _rotuloPrazo(task.dueDate) : 'sem data';
+            const prazoClasse = atrasado ? 'text-red-400 font-semibold' : 'text-zinc-500';
+
+            const label = task.label
+                ? `<span class="px-1.5 py-0.5 rounded-full text-[8px] font-mono border ${task.label === 'urgente' ? 'border-red-800/60 text-red-400' : 'border-blue-800/60 text-blue-400'}">${escapeHtml(task.label)}</span>`
                 : '';
             const subtasks = task.subtasks || [];
-            const subtaskHtml = subtasks.length ? `<span class="text-[8px] font-mono text-zinc-600">⊟ ${subtasks.filter(s=>s.completed).length}/${subtasks.length}</span>` : '';
-            return `<div class="${doneClass} flex items-start gap-3 py-3 border-b border-zinc-900/60 last:border-0 cursor-pointer hover:bg-white/[0.02] rounded px-2 -mx-2 transition-colors"
+            const sub = subtasks.length
+                ? `<span class="text-[8px] font-mono text-zinc-600">⊟ ${subtasks.filter(s => s.completed).length}/${subtasks.length}</span>`
+                : '';
+
+            return `<div class="group flex items-center gap-3 py-2.5 border-b border-zinc-900/60 last:border-0 cursor-pointer hover:bg-white/[0.03] rounded px-2 -mx-2 transition-colors"
                          onclick="openTaskDetailModal(${task.leadId}, ${task.id})">
-                <button type="button"
+                <button type="button" title="Concluir tarefa"
                     onclick="event.stopPropagation(); toggleLeadTask(${task.leadId}, ${task.id})"
-                    class="w-4 h-4 rounded-full border-2 flex-shrink-0 mt-0.5 transition-colors"
-                    style="border-color:${pc.border}; background:${task.completed ? pc.bg : 'transparent'}"></button>
+                    class="w-4 h-4 rounded-full border-2 flex-shrink-0 transition-colors hover:scale-110"
+                    style="border-color:${pc.border}"></button>
+
+                <span class="shrink-0 text-sm" title="${escapeHtml(tipo.rotulo)}">${tipo.icone}</span>
+
                 <div class="flex-1 min-w-0">
-                    <p class="text-sm font-medium truncate ${textClass}">${task.text}</p>
-                    <div class="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span class="text-[9px] font-mono text-zinc-600">${task.leadName}</span>
-                        ${task.dueTime ? `<span class="text-[9px] font-mono text-zinc-500">${task.dueTime}</span>` : ''}
-                        ${labelHtml}${subtaskHtml}
-                    </div>
+                    <p class="text-sm font-medium text-zinc-200 truncate">${escapeHtml(task.text)}</p>
+                    <p class="text-[9px] font-mono text-zinc-600 truncate mt-0.5">
+                        ${escapeHtml(task.leadName)}${agente ? ' · ' + escapeHtml(agente.name) : ''}
+                    </p>
+                </div>
+
+                <div class="shrink-0 flex items-center gap-2">
+                    ${label}${sub}
+                    ${task.dueTime ? `<span class="font-mono text-[10px] text-zinc-400">${escapeHtml(task.dueTime)}</span>` : ''}
+                    <span class="font-mono text-[10px] ${prazoClasse} w-28 text-right">${escapeHtml(prazo)}</span>
                 </div>
             </div>`;
         }).join('');
-    return `<div>
-        <div class="font-mono text-[10px] uppercase tracking-wider ${titleClass} mb-3">${title}</div>
-        <div class="bg-slate-900 border border-zinc-900 rounded-xl px-4 py-1">${rows}</div>
+
+    const maisLink = excedente > 0
+        ? `<button type="button" onclick="toggleAgendaGrupo('${escapeHtml(chave)}')"
+               class="w-full py-2 font-mono text-[10px] uppercase tracking-wider text-cyan-400 hover:text-cyan-300 border-t border-zinc-900/60 transition-colors">
+               ${aberto ? '− Mostrar menos' : `+ Ver as outras ${excedente}`}
+           </button>`
+        : '';
+
+    return `<div class="mb-6">
+        <div class="flex items-baseline gap-2 mb-2">
+            <span class="font-mono text-[10px] uppercase tracking-wider ${cfg.titulo}">${cfg.marca} ${escapeHtml(title)}</span>
+            <span class="font-mono text-[10px] text-zinc-600">${tasks.length}</span>
+        </div>
+        <div class="bg-slate-900 border ${cfg.borda} rounded-xl px-4 py-1">${rows}${maisLink}</div>
     </div>`;
 }
 
 function _fmtAgendaDate(dateStr) {
     const d = new Date(dateStr + 'T12:00:00');
-    const today = new Date().toISOString().split('T')[0];
+    const today = _dataLocalISO();
     const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    const tomorrowStr = _dataLocalISO(tomorrow);
     if (dateStr === today) return 'Hoje';
     if (dateStr === tomorrowStr) return 'Amanhã';
     return d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'short' });
@@ -1593,7 +1845,7 @@ function uploadCurrentLeadFile(fileInput) {
     lead.attachments.push({
         name: file.name,
         size: sizeStr,
-        date: new Date().toISOString().split('T')[0]
+        date: _dataLocalISO()
     });
 
     salvar({ leads: [lead] });
@@ -1724,7 +1976,7 @@ function simulateSpreadsheetUpload() {
                     clientName: row.name,
                     value: row.value,
                     productId: client.productId,
-                    processedDate: new Date().toISOString().split('T')[0]
+                    processedDate: _dataLocalISO()
                 });
             }
             
@@ -1834,7 +2086,7 @@ function approveAporte(aporteId) {
     ap.logs.push({
         action: "aprovado_lider",
         user: db.users.find(u => u.id === currentUserId).name,
-        date: new Date().toISOString().split('T')[0]
+        date: _dataLocalISO()
     });
 
     salvar({ aportes: [ap] });
@@ -1851,7 +2103,7 @@ function homologateAporte(aporteId) {
     ap.logs.push({
         action: "homologado",
         user: db.users.find(u => u.id === currentUserId).name,
-        date: new Date().toISOString().split('T')[0]
+        date: _dataLocalISO()
     });
 
     salvar({ aportes: [ap] });
@@ -1903,9 +2155,9 @@ function saveAporte(event) {
         agentId: agentId,
         leaderId: leaderId,
         value: value,
-        date: new Date().toISOString().split('T')[0],
+        date: _dataLocalISO(),
         status: "pendente_lider",
-        logs: [{ action: "criado", user: db.users.find(u => u.id === currentUserId).name, date: new Date().toISOString().split('T')[0] }]
+        logs: [{ action: "criado", user: db.users.find(u => u.id === currentUserId).name, date: _dataLocalISO() }]
     };
     db.aportes.push(novoAporte);
 
@@ -2271,6 +2523,27 @@ function saveProduct(event) {
 }
 
 // ----------------- UTILITIES -----------------
+
+// Todo texto vindo de pessoa (nome de lead, tarefa, anexo, etapa) passa por
+// aqui antes de entrar em innerHTML. Sem isto, um nome com <script> executa no
+// navegador de quem abrir a tela.
+function escapeHtml(valor) {
+    if (valor === null || valor === undefined) return '';
+    return String(valor)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// A etapa final do funil é a de maior "order", não a chave literal 'fechado' —
+// o funil é customizável e o cliente já renomeia etapas.
+function _chaveEstagioFinal() {
+    if (!db.stages || db.stages.length === 0) return 'fechado';
+    return db.stages.reduce((maior, s) => (s.order > maior.order ? s : maior), db.stages[0]).key;
+}
+
 
 // A taxa de performance passou a ser numérica, mas bases ainda não migradas
 // guardam frases ("20% sobre o que exceder o CDI"). Aceita os dois formatos para
@@ -2730,6 +3003,8 @@ window.addSubtask = addSubtask;
 window.toggleSubtask = toggleSubtask;
 window.deleteSubtask = deleteSubtask;
 window.renderAgendaView = renderAgendaView;
+window.setAgendaFiltroAgente = setAgendaFiltroAgente;
+window.toggleAgendaGrupo = toggleAgendaGrupo;
 window.uploadCurrentLeadFile = uploadCurrentLeadFile;
 window.deleteLeadAttachment = deleteLeadAttachment;
 window.downloadLeadAttachment = downloadLeadAttachment;
