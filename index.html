@@ -74,10 +74,15 @@
                     <a href="#" data-target="pipeline" class="sidebar-link">
                         <span>📈</span> Pipeline
                     </a>
-                    <a href="#" data-target="financial" class="sidebar-link">
+                    <!-- Motor Rateios e Aprovações ficam fora da v1 (reunião de
+                         18/08): só o administrador enxerga. Começam ocultos e
+                         renderSidebar() decide pelo papel do usuário. -->
+                    <a href="#" data-target="financial" id="sidebar-link-financial"
+                        class="sidebar-link hidden">
                         <span>⚙️</span> Motor Rateios
                     </a>
-                    <a href="#" data-target="approvals" class="sidebar-link">
+                    <a href="#" data-target="approvals" id="sidebar-link-approvals"
+                        class="sidebar-link hidden">
                         <span>🛡️</span> Aprovações
                     </a>
                     <a href="#" data-target="partnerships" class="sidebar-link">

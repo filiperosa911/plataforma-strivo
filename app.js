@@ -149,7 +149,22 @@ function renderSidebar() {
                 settingsLink.classList.add('hidden');
             }
         }
+
+        // Motor Rateios e Aprovações estão fora da v1: exclusivos do admin.
+        ['sidebar-link-financial', 'sidebar-link-approvals'].forEach(id => {
+            const link = document.getElementById(id);
+            if (!link) return;
+            link.classList.toggle('hidden', !isAdmin(user.role));
+        });
     }
+}
+
+// Views que ainda não entram na entrega ao cliente. Centralizado aqui para o
+// dia em que forem liberadas ser um lugar só.
+const VIEWS_SOMENTE_ADMIN = ['financial', 'approvals'];
+
+function isAdmin(role) {
+    return (role || currentRole) === 'admin';
 }
 
 function setupKanbanDragDropEvents() {
@@ -196,6 +211,13 @@ function switchView(viewId) {
     if (viewId === 'settings' && currentRole !== 'diretoria' && currentRole !== 'admin') {
         alert("Acesso restrito à Diretoria Comercial.");
         switchView('dashboard');
+        return;
+    }
+
+    // Esconder o link da sidebar não basta: switchView é global e chamável pelo
+    // console, e os módulos seguem no HTML.
+    if (VIEWS_SOMENTE_ADMIN.includes(viewId) && !isAdmin()) {
+        switchView('crm');
         return;
     }
 

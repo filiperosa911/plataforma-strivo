@@ -1,7 +1,7 @@
 // STRIVO PLATFORM // INITIAL MOCK DATA DEFINITIONS
 const INITIAL_MOCK_DATA = {
     users: [
-        { id: 1, name: "Filipe Rosa", role: "diretoria", email: "filipe@vertic.com", parentId: null, username: "filipe.rosa", status: "active" },
+        { id: 1, name: "Filipe Rosa", role: "admin", email: "filipe@vertic.com", parentId: null, username: "filipe.rosa", status: "active" },
         { id: 2, name: "Diogo Wunsch", role: "diretoria", email: "diogo@strivo.com", parentId: null, username: "diogo.wunsch", status: "active" },
         { id: 3, name: "Gustav Gorski", role: "diretoria", email: "gustav@strivo.com", parentId: null, username: "gustav.gorski", status: "active" },
         { id: 4, name: "Thiago Vicente", role: "diretoria", email: "thiago@strivo.com", parentId: null, username: "thiago.vicente", status: "active" },
