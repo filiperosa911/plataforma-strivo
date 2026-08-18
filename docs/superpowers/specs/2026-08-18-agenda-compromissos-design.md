@@ -124,8 +124,11 @@ Semana está ativa.
 
 `_agendaViewMode` nasce `'month'`; no HTML, `agenda-month-calendar` perde o
 `hidden` e `agenda-week-strip` ganha, para a página não piscar a visão errada
-antes do primeiro render. Visão e densidade ficam no `localStorage`
-(`strivo_agenda_view`, `strivo_agenda_dias`), ao lado de `strivo_theme`.
+antes do primeiro render.
+
+A visão **não** é persistida: toda carga abre no Mês, que foi o pedido. Só a
+densidade 5/7 dias vai para o `localStorage` (`strivo_agenda_dias`), ao lado de
+`strivo_theme` — ela é preferência de leitura, não estado de navegação.
 
 ## Fora de escopo
 
@@ -149,8 +152,8 @@ foi pedido.
 2. Mesma coisa com lead escolhido → a tarefa aparece também no modal do lead e o
    alerta "sem próximo passo" some para aquele lead.
 3. Alternar 5/7 dias → sábado e domingo estreitam e vão para o fim da linha, sem
-   perder eventos; recarregar mantém a escolha.
-4. Recarregar a página → abre no Mês.
+   perder eventos; recarregar mantém a escolha de densidade.
+4. Recarregar a página → abre sempre no Mês, mesmo tendo saído na Semana.
 5. Assessor comum não vê compromisso de outro assessor; admin vê todos e o filtro
    por assessor recorta os dois tipos.
 6. Simular banco sem a tabela → agenda carrega com as tasks e sem erro fatal.
