@@ -261,6 +261,9 @@ const INITIAL_MOCK_DATA = {
         { period: "2026-06", clientCode: "CLI-SWI-519", clientName: "Bruno Teixeira", value: 4843.74, productId: 3, processedDate: "2026-06-04" },
         { period: "2026-05", clientCode: "CLI-STR-520", clientName: "Carolina Fernandes", value: 5639.07, productId: 2, processedDate: "2026-05-26" }
     ],
+    // Compromissos sem lead (reuniao interna, banco, viagem). Vazio no mock:
+    // quem usa o modo local cria os proprios pela agenda.
+    compromissos: [],
     logs: [
         { id: 1, type: "system", message: "Sistema inicializado com dados de demonstração.", date: "2026-06-11 11:00:00" }
     ]

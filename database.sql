@@ -142,6 +142,36 @@ CREATE TABLE IF NOT EXISTS "faturamentoHistorico" (
 ALTER TABLE "faturamentoHistorico" ENABLE ROW LEVEL SECURITY;
 
 
+-- 8. TABELA DE COMPROMISSOS (AGENDA SEM LEAD)
+-- Reuniao interna, banco, viagem: compromisso que nao pertence a nenhum lead e
+-- por isso nao cabe em "leads"."tasks". Quando o compromisso TEM lead, ele
+-- continua sendo uma task dentro do lead — assim o card do funil e o alerta de
+-- "lead sem proximo passo" seguem funcionando com uma fonte so.
+CREATE TABLE IF NOT EXISTS "compromissos" (
+    "id" BIGINT PRIMARY KEY,
+    "title" TEXT NOT NULL,
+    "description" TEXT NOT NULL DEFAULT '',
+    -- "date"/"time" como TEXT ('AAAA-MM-DD' e 'HH:MM') para casar com
+    -- "tasks"."dueDate"/"dueTime": a agenda compara datas por string em todo
+    -- lugar, e um DATE nativo obrigaria a converter em cada comparacao.
+    "date" TEXT NOT NULL,
+    "time" TEXT NOT NULL DEFAULT '',
+    "type" TEXT NOT NULL DEFAULT 'reuniao',
+    "priority" SMALLINT NOT NULL DEFAULT 3,
+    -- Lead apagado deixa o compromisso vivo como interno, em vez de sumir com a
+    -- reuniao da agenda de quem ia participar dela.
+    "leadId" BIGINT REFERENCES "leads"("id") ON DELETE SET NULL,
+    "agentId" BIGINT NOT NULL REFERENCES "users"("id"),
+    "completed" BOOLEAN NOT NULL DEFAULT false,
+    "createdDate" TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS "compromissos_agente_data_idx" ON "compromissos" ("agentId", "date");
+
+-- Habilitar RLS para compromissos
+ALTER TABLE "compromissos" ENABLE ROW LEVEL SECURITY;
+
+
 -- ==================== FUNÇÕES AUXILIARES DE SESSÃO (AGORA VIA auth.uid() REAL) ====================
 
 -- Função para obter o ID interno (bigint) do usuário logado, a partir do JWT
@@ -382,6 +412,34 @@ CREATE POLICY "Deleção de faturamento por diretoria" ON "faturamentoHistorico"
     get_my_role() = ANY (ARRAY['diretoria', 'admin'])
 );
 
+
+-- Regras para a tabela COMPROMISSOS
+-- Sem "leaderId": o compromisso e do assessor. Lideranca ve pela regra de
+-- diretoria/admin apenas; para o time, a visao vem do filtro da agenda.
+DROP POLICY IF EXISTS "Visualização de compromissos" ON "compromissos";
+DROP POLICY IF EXISTS "Criação de compromissos" ON "compromissos";
+DROP POLICY IF EXISTS "Edição de compromissos" ON "compromissos";
+DROP POLICY IF EXISTS "Deleção de compromissos" ON "compromissos";
+
+CREATE POLICY "Visualização de compromissos" ON "compromissos" FOR SELECT USING (
+    "agentId" = get_my_id()
+    OR get_my_role() = ANY (ARRAY['diretoria', 'admin'])
+);
+
+CREATE POLICY "Criação de compromissos" ON "compromissos" FOR INSERT WITH CHECK (
+    "agentId" = get_my_id()
+    OR get_my_role() = ANY (ARRAY['diretoria', 'admin'])
+);
+
+CREATE POLICY "Edição de compromissos" ON "compromissos" FOR UPDATE USING (
+    "agentId" = get_my_id()
+    OR get_my_role() = ANY (ARRAY['diretoria', 'admin'])
+);
+
+CREATE POLICY "Deleção de compromissos" ON "compromissos" FOR DELETE USING (
+    "agentId" = get_my_id()
+    OR get_my_role() = ANY (ARRAY['diretoria', 'admin'])
+);
 
 
 -- ==================== GATILHOS DE SEGURANÇA (TRIGGER) ====================

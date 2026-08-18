@@ -1336,12 +1336,16 @@ function deleteLeadTask(leadId, taskId) {
 
 // Task Detail Modal
 let _tdmLeadId = null, _tdmTaskId = null, _tdmPriority = 3, _tdmLabel = '';
+// De onde veio o item aberto no modal de detalhe: tarefa de lead ou
+// compromisso avulso. Decide onde salvar e o que esconder.
+let _tdmOrigem = 'task';
 
 function openTaskDetailModal(leadId, taskId) {
     const lead = db.leads.find(l => l.id === leadId);
     if (!lead) return;
     const task = lead.tasks.find(t => t.id === taskId);
     if (!task) return;
+    _tdmOrigem = 'task';
     _tdmLeadId = leadId; _tdmTaskId = taskId;
     _tdmPriority = task.priority || 3; _tdmLabel = task.label || '';
     document.getElementById('tdm-title').value = task.text || '';
@@ -1350,12 +1354,13 @@ function openTaskDetailModal(leadId, taskId) {
     document.getElementById('tdm-due-time').value = task.dueTime || '';
     document.getElementById('tdm-description').value = task.description || '';
     _updateTdmPriorityCircle(); _updateTdmPriorityPills(); _updateTdmLabelPills(); _renderSubtasks();
+    _aplicarTdmOrigem();
     document.getElementById('task-detail-modal').classList.remove('hidden');
 }
 
 function closeTaskDetailModal() {
     document.getElementById('task-detail-modal').classList.add('hidden');
-    _tdmLeadId = null; _tdmTaskId = null;
+    _tdmLeadId = null; _tdmTaskId = null; _tdmOrigem = 'task';
 }
 
 function setTaskPriority(p) { _tdmPriority = p; _updateTdmPriorityCircle(); _updateTdmPriorityPills(); }
@@ -1436,6 +1441,7 @@ function deleteSubtask(subtaskId) {
 }
 
 function saveTaskDetail() {
+    if (_tdmOrigem === 'compromisso') return _salvarCompromissoDetalhe();
     if (!_tdmLeadId || !_tdmTaskId) return;
     const lead = db.leads.find(l => l.id === _tdmLeadId);
     const task = lead?.tasks.find(t => t.id === _tdmTaskId);
@@ -1454,6 +1460,7 @@ function saveTaskDetail() {
 }
 
 function deleteCurrentTask() {
+    if (_tdmOrigem === 'compromisso') return _excluirCompromissoDetalhe();
     if (!_tdmLeadId || !_tdmTaskId || !confirm('Excluir esta tarefa?')) return;
     const lead = db.leads.find(l => l.id === _tdmLeadId);
     if (!lead) return;
@@ -1465,14 +1472,41 @@ function deleteCurrentTask() {
     if (agendaView && !agendaView.classList.contains('hidden')) renderAgendaView();
 }
 
+function _salvarCompromissoDetalhe() {
+    const c = _compromissos().find(x => x.id === _tdmTaskId);
+    if (!c) return;
+    c.title = document.getElementById('tdm-title').value.trim() || c.title;
+    c.date = document.getElementById('tdm-due-date').value || c.date;
+    c.time = document.getElementById('tdm-due-time').value;
+    c.description = document.getElementById('tdm-description').value;
+    c.priority = _tdmPriority;
+    salvar({ compromissos: [c] });
+    closeTaskDetailModal();
+    renderAgendaView();
+}
+
+function _excluirCompromissoDetalhe() {
+    if (!confirm('Excluir este compromisso?')) return;
+    const id = _tdmTaskId;
+    const c = _compromissos().find(x => x.id === id);
+    db.compromissos = _compromissos().filter(x => x.id !== id);
+    // O upsert nunca remove linha: sem o remover(), o compromisso voltaria da
+    // nuvem no proximo login.
+    remover('compromissos', 'id', id);
+    if (c) logSystem(`Compromisso "${c.title}" excluído`);
+    closeTaskDetailModal();
+    renderAgendaView();
+}
+
 // Agenda View
-let _agendaViewMode = 'week'; // 'week' | 'month'
+let _agendaViewMode = 'month'; // 'week' | 'month' — abre sempre no mes
 let _agendaSelectedDate = null; // 'YYYY-MM-DD' ou null (sem filtro)
 let _agendaCalendarRef = new Date(); // mes/ano exibido na visao de mes
 
 function renderAgendaView() {
     try {
         _updateAgendaViewToggleUI();
+        _updateAgendaDensidadeUI();
         _renderAgendaFiltroAgente();
         if (_agendaViewMode === 'month') {
             _renderAgendaMonthCalendar();
@@ -1609,6 +1643,56 @@ function setAgendaFiltroAgente(valor) {
 // e o mês vira uma parede de texto ilegível.
 const AGENDA_EVENTOS_POR_DIA = 3;
 
+// Semana de 5 dias úteis: sábado e domingo viram duas colunas estreitas no fim
+// da linha. Continuam sendo dias de verdade (clicáveis, com eventos), só que
+// espremidos, porque quase nada é marcado neles.
+let _agendaDiasUteis = localStorage.getItem('strivo_agenda_dias') === '5';
+
+function setAgendaDensidade(modo) {
+    _agendaDiasUteis = modo === '5';
+    localStorage.setItem('strivo_agenda_dias', _agendaDiasUteis ? '5' : '7');
+    renderAgendaView();
+}
+
+function _updateAgendaDensidadeUI() {
+    const caixa = document.getElementById('agenda-densidade-toggle');
+    const btn5 = document.getElementById('agenda-dias-5-btn');
+    const btn7 = document.getElementById('agenda-dias-7-btn');
+    if (!caixa || !btn5 || !btn7) return;
+    // O toggle só faz sentido sobre a grade do mês; na tira da semana some.
+    caixa.classList.toggle('hidden', _agendaViewMode !== 'month');
+    const ativo = ['bg-cyan-500/10', 'text-cyan-300'];
+    const inativo = ['text-zinc-500', 'hover:text-zinc-300'];
+    [btn5, btn7].forEach(b => b.classList.remove(...ativo, ...inativo));
+    btn5.classList.add(..._agendaDiasUteis ? ativo : inativo);
+    btn7.classList.add(...!_agendaDiasUteis ? ativo : inativo);
+}
+
+// Em qual coluna o dia cai. Com 5 dias úteis a semana começa na segunda, senão
+// sábado e domingo não teriam como ficar juntos no fim da linha.
+function _colunaDoDia(data) {
+    const d = data.getDay();
+    return _agendaDiasUteis ? (d + 6) % 7 : d;
+}
+
+// Clique simples filtra o dia; duplo clique cria compromisso. Sem esta espera o
+// primeiro clique já redesenharia o calendário, e o duplo clique se perderia
+// junto com a célula que o navegador estava seguindo.
+let _agendaCliqueTimer = null;
+
+function _cliqueDia(ds) {
+    if (_agendaCliqueTimer) clearTimeout(_agendaCliqueTimer);
+    _agendaCliqueTimer = setTimeout(() => {
+        _agendaCliqueTimer = null;
+        _selectAgendaDate(ds);
+    }, 220);
+}
+
+function _duploCliqueDia(ds) {
+    if (_agendaCliqueTimer) { clearTimeout(_agendaCliqueTimer); _agendaCliqueTimer = null; }
+    openNovoCompromissoModal(ds);
+}
+
 function _renderAgendaMonthCalendar() {
     const container = document.getElementById('agenda-month-calendar');
     if (!container) return;
@@ -1630,19 +1714,27 @@ function _renderAgendaMonthCalendar() {
     }));
 
     const firstOfMonth = new Date(year, month, 1);
-    const startWeekday = firstOfMonth.getDay();
+    const startCol = _colunaDoDia(firstOfMonth);
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-    const dayNames = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+    const dayNames = _agendaDiasUteis
+        ? ['S', 'T', 'Q', 'Q', 'S', 'S', 'D']
+        : ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+    const gridCols = _agendaDiasUteis
+        ? 'repeat(5, minmax(0, 1fr)) 0.45fr 0.45fr'
+        : 'repeat(7, minmax(0, 1fr))';
 
     let cells = '';
-    for (let i = 0; i < startWeekday; i++) cells += `<div></div>`;
+    for (let i = 0; i < startCol; i++) cells += `<div></div>`;
     for (let day = 1; day <= daysInMonth; day++) {
         const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const data = new Date(year, month, day);
+        const fds = _agendaDiasUteis && _colunaDoDia(data) >= 5;
         const isToday = ds === todayStr;
         const isSelected = ds === _agendaSelectedDate;
         const doDia = porDia[ds] || [];
         let cellClass = 'border border-zinc-800/60 hover:border-cyan-500/50';
+        if (fds) cellClass += ' bg-black/20';
         if (isToday) cellClass += ' bg-rose-500/10 border-rose-500/40';
         if (isSelected) cellClass += ' ring-2 ring-cyan-400';
 
@@ -1650,9 +1742,11 @@ function _renderAgendaMonthCalendar() {
             const pc = TASK_PRIORITY_CFG[t.priority || 4];
             const tipo = tipoTarefa(t);
             const dica = `${t.dueTime ? t.dueTime + ' · ' : ''}${tipo.rotulo}: ${t.text} — ${t.leadName}`;
-            const hora = t.dueTime ? `<span class="shrink-0 text-zinc-400">${escapeHtml(t.dueTime)}</span>` : '';
+            // Na coluna estreita do fim de semana a hora comeria o título todo.
+            const hora = (t.dueTime && !fds) ? `<span class="shrink-0 text-zinc-400">${escapeHtml(t.dueTime)}</span>` : '';
             return `<div title="${escapeHtml(dica)}"
-                         onclick="event.stopPropagation(); openTaskDetailModal(${t.leadId}, ${t.id})"
+                         onclick="event.stopPropagation(); abrirItemAgenda('${t.origem}', ${t.leadId}, ${t.id})"
+                         ondblclick="event.stopPropagation()"
                          class="flex items-center gap-1 rounded-sm bg-white/[0.04] hover:bg-white/[0.12] pl-1 pr-1 py-0.5 font-mono text-[10px] leading-[1.3] text-zinc-300 transition-colors"
                          style="border-left:2px solid ${pc.border}">
                 ${hora}<span class="truncate">${escapeHtml(t.text)}</span>
@@ -1664,8 +1758,10 @@ function _renderAgendaMonthCalendar() {
             ? `<div class="px-1 pt-0.5 font-mono text-[10px] leading-[1.3] text-cyan-400/80">… +${excedente}</div>`
             : '';
 
-        cells += `<div class="${cellClass} rounded-lg p-1.5 h-32 flex flex-col cursor-pointer transition-colors overflow-hidden" onclick="_selectAgendaDate('${ds}')">
-            <span class="text-[11px] font-mono px-0.5 ${isToday ? 'text-rose-400 font-bold' : 'text-zinc-400'}">${day}</span>
+        cells += `<div class="${cellClass} rounded-lg p-1.5 h-32 flex flex-col cursor-pointer transition-colors overflow-hidden"
+                       title="Duplo clique para criar um compromisso"
+                       onclick="_cliqueDia('${ds}')" ondblclick="_duploCliqueDia('${ds}')">
+            <span class="text-[11px] font-mono px-0.5 ${isToday ? 'text-rose-400 font-bold' : (fds ? 'text-zinc-600' : 'text-zinc-400')}">${day}</span>
             <div class="mt-1 flex flex-col gap-0.5 min-h-0">${eventos}${mais}</div>
         </div>`;
     }
@@ -1676,27 +1772,254 @@ function _renderAgendaMonthCalendar() {
             <span class="font-mono text-xs uppercase tracking-wider text-zinc-300">${monthNames[month]} ${year}</span>
             <button type="button" onclick="_shiftAgendaMonth(1)" class="text-zinc-400 hover:text-white font-mono text-sm px-2 py-1 transition-colors">›</button>
         </div>
-        <div class="grid grid-cols-7 gap-1.5 mb-1.5">
+        <div class="grid gap-1.5 mb-1.5" style="grid-template-columns:${gridCols}">
             ${dayNames.map(n => `<div class="text-center text-[9px] font-mono text-zinc-600">${n}</div>`).join('')}
         </div>
-        <div class="grid grid-cols-7 gap-1.5">${cells}</div>
+        <div class="grid gap-1.5" style="grid-template-columns:${gridCols}">${cells}</div>
+        <p class="mt-2 font-mono text-[9px] text-zinc-600">Duplo clique num dia para criar um compromisso.</p>
     `;
 }
 
 // Assessor selecionado no filtro da agenda (null = todos que eu enxergo).
 let _agendaFiltroAgente = null;
 
+// ----------------- COMPROMISSOS AVULSOS -----------------
+
+// Compromisso sem lead (reuniao interna, banco, viagem) nao cabe em
+// lead.tasks, entao vive em tabela propria. Banco ainda nao migrado e o modo
+// local antigo nao tem o campo: toda leitura passa por aqui.
+function _compromissos() {
+    if (!Array.isArray(db.compromissos)) db.compromissos = [];
+    return db.compromissos;
+}
+
+// Um compromisso lido com a mesma forma de uma tarefa de lead. A agenda toda
+// — calendario, tira da semana, blocos de prazo, contadores — trabalha em cima
+// deste formato e nao precisa saber de onde o item veio; so as acoes (abrir,
+// concluir, excluir) olham a "origem".
+function _compromissoComoItem(c) {
+    const lead = c.leadId ? db.leads.find(l => l.id === c.leadId) : null;
+    return {
+        id: c.id,
+        text: c.title,
+        description: c.description || '',
+        dueDate: c.date,
+        dueTime: c.time || '',
+        type: c.type || 'reuniao',
+        priority: c.priority || 3,
+        completed: !!c.completed,
+        subtasks: [],
+        label: '',
+        origem: 'compromisso',
+        leadId: c.leadId || null,
+        leadName: lead ? lead.name : 'Compromisso interno',
+        agentId: c.agentId
+    };
+}
+
 function _agendaTarefasVisiveis() {
     const visibleIds = getVisibleUserIds();
-    return db.leads
+    const doFiltro = id => !_agendaFiltroAgente || id === _agendaFiltroAgente;
+
+    const deLeads = db.leads
         .filter(l => visibleIds.includes(l.agentId))
-        .filter(l => !_agendaFiltroAgente || l.agentId === _agendaFiltroAgente)
+        .filter(l => doFiltro(l.agentId))
         .flatMap(l => (l.tasks || []).map(t => ({
             ...t,
+            origem: 'task',
             leadId: l.id,
             leadName: l.name,
             agentId: l.agentId
         })));
+
+    const avulsos = _compromissos()
+        .filter(c => visibleIds.includes(c.agentId))
+        .filter(c => doFiltro(c.agentId))
+        .map(_compromissoComoItem);
+
+    return deLeads.concat(avulsos);
+}
+
+// Task de lead e compromisso avulso sao a mesma coisa para quem olha a agenda,
+// mas moram em lugares diferentes: estas duas funcoes sao o unico ponto que
+// precisa saber disso.
+function abrirItemAgenda(origem, leadId, itemId) {
+    if (origem === 'compromisso') openCompromissoDetail(itemId);
+    else openTaskDetailModal(leadId, itemId);
+}
+
+function toggleItemAgenda(origem, leadId, itemId) {
+    if (origem === 'compromisso') toggleCompromisso(itemId);
+    else toggleLeadTask(leadId, itemId);
+}
+
+function toggleCompromisso(id) {
+    const c = _compromissos().find(x => x.id === id);
+    if (!c) return;
+    c.completed = !c.completed;
+    salvar({ compromissos: [c] });
+    logSystem(`Compromisso "${c.title}" marcado como ${c.completed ? 'CONCLUÍDO' : 'PENDENTE'}`);
+    renderAgendaView();
+}
+
+// ----------------- NOVO COMPROMISSO (DUPLO CLIQUE NO DIA) -----------------
+
+let _ncmTipo = 'reuniao', _ncmPrioridade = 3;
+
+function openNovoCompromissoModal(dataISO) {
+    const modal = document.getElementById('novo-compromisso-modal');
+    if (!modal) return;
+    _ncmTipo = 'reuniao';
+    _ncmPrioridade = 3;
+
+    document.getElementById('ncm-title').value = '';
+    document.getElementById('ncm-date').value = dataISO || _hojeISO();
+    document.getElementById('ncm-time').value = '';
+    document.getElementById('ncm-description').value = '';
+    document.getElementById('ncm-data-label').textContent = _fmtAgendaDate(dataISO || _hojeISO());
+
+    _renderNcmTipos();
+    _updateNcmPrioridadePills();
+    _preencherNcmLeads();
+    _preencherNcmResponsavel();
+
+    modal.classList.remove('hidden');
+    setTimeout(() => document.getElementById('ncm-title').focus(), 30);
+}
+
+function closeNovoCompromissoModal() {
+    const modal = document.getElementById('novo-compromisso-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function _renderNcmTipos() {
+    const alvo = document.getElementById('ncm-tipos');
+    if (!alvo) return;
+    alvo.innerHTML = Object.entries(TASK_TYPE_CFG).map(([chave, cfg]) => {
+        const ativo = chave === _ncmTipo;
+        return `<button type="button" onclick="setNcmTipo('${chave}')"
+            class="px-2 py-1 rounded-lg text-[10px] font-mono border transition-colors ${ativo
+                ? 'border-cyan-500/60 bg-cyan-500/10 text-cyan-300'
+                : 'border-zinc-800 text-zinc-500 hover:text-zinc-300'}">
+            ${cfg.icone} ${escapeHtml(cfg.rotulo)}
+        </button>`;
+    }).join('');
+}
+
+function setNcmTipo(tipo) {
+    _ncmTipo = tipo;
+    _renderNcmTipos();
+}
+
+function setNcmPrioridade(p) {
+    _ncmPrioridade = p;
+    _updateNcmPrioridadePills();
+}
+
+function _updateNcmPrioridadePills() {
+    document.querySelectorAll('.ncm-priority-pill').forEach(btn => {
+        btn.style.opacity = parseInt(btn.dataset.p) === _ncmPrioridade ? '1' : '0.3';
+    });
+}
+
+// Só os leads que a pessoa enxerga — o seletor não pode virar uma porta lateral
+// para a carteira de outro assessor.
+function _preencherNcmLeads() {
+    const alvo = document.getElementById('ncm-lead');
+    if (!alvo) return;
+    const visibleIds = getVisibleUserIds();
+    const leads = db.leads
+        .filter(l => visibleIds.includes(l.agentId))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    alvo.innerHTML = `<option value="">(sem lead — compromisso interno)</option>` +
+        leads.map(l => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
+    alvo.value = '';
+}
+
+// Assessor comum não escolhe dono: o compromisso é dele. Diretoria e admin
+// marcam para quem quiserem.
+function _preencherNcmResponsavel() {
+    const wrap = document.getElementById('ncm-agent-wrap');
+    const alvo = document.getElementById('ncm-agent');
+    if (!wrap || !alvo) return;
+    const mandaEmTodos = currentRole === 'diretoria' || currentRole === 'admin';
+    wrap.classList.toggle('hidden', !mandaEmTodos);
+    if (!mandaEmTodos) { alvo.innerHTML = ''; return; }
+    const visibleIds = getVisibleUserIds();
+    alvo.innerHTML = db.users
+        .filter(u => visibleIds.includes(u.id))
+        .map(u => `<option value="${u.id}" ${u.id === currentUserId ? 'selected' : ''}>${escapeHtml(u.name)}</option>`)
+        .join('');
+    alvo.value = String(currentUserId);
+}
+
+function salvarNovoCompromisso() {
+    const titulo = document.getElementById('ncm-title').value.trim();
+    if (!titulo) { alert('Descreva o compromisso.'); return; }
+
+    const data = document.getElementById('ncm-date').value || _hojeISO();
+    const hora = document.getElementById('ncm-time').value || '';
+    const descricao = document.getElementById('ncm-description').value.trim();
+    const leadIdVal = document.getElementById('ncm-lead').value;
+    const agentSel = document.getElementById('ncm-agent');
+    const agentId = (agentSel && agentSel.value) ? parseInt(agentSel.value) : currentUserId;
+
+    // Com lead escolhido o compromisso é uma tarefa daquele lead: assim ele
+    // aparece no card do funil e conta como próximo passo. A tabela de
+    // compromissos existe só para o que não tem dono comercial.
+    if (leadIdVal) {
+        const lead = db.leads.find(l => l.id === parseInt(leadIdVal));
+        if (!lead) { alert('Lead não encontrado.'); return; }
+        if (!lead.tasks) lead.tasks = [];
+        const novoId = lead.tasks.length > 0 ? Math.max(...lead.tasks.map(t => t.id)) + 1 : 1;
+        lead.tasks.push({
+            id: novoId, text: titulo, description: descricao, dueDate: data, dueTime: hora,
+            completed: false, priority: _ncmPrioridade, label: '', type: _ncmTipo, subtasks: []
+        });
+        salvar({ leads: [lead] });
+        logSystem(`Compromisso "${titulo}" agendado para ${data} no lead "${lead.name}"`);
+    } else {
+        // Date.now() em vez de max(ids)+1: compromisso é criado por várias
+        // pessoas ao mesmo tempo, e max+1 colide entre navegadores.
+        const novo = {
+            id: Date.now(), title: titulo, description: descricao, date: data, time: hora,
+            type: _ncmTipo, priority: _ncmPrioridade, leadId: null, agentId,
+            completed: false, createdDate: _hojeISO()
+        };
+        _compromissos().push(novo);
+        salvar({ compromissos: [novo] });
+        logSystem(`Compromisso interno "${titulo}" agendado para ${data}`);
+    }
+
+    closeNovoCompromissoModal();
+    renderAgendaView();
+    renderCRM();
+}
+
+// Compromisso avulso reaproveita o modal de detalhe da tarefa. Subtarefas e
+// label ficam ocultos: a tabela não tem essas colunas.
+function openCompromissoDetail(id) {
+    const c = _compromissos().find(x => x.id === id);
+    if (!c) return;
+    const lead = c.leadId ? db.leads.find(l => l.id === c.leadId) : null;
+    _tdmOrigem = 'compromisso'; _tdmLeadId = null; _tdmTaskId = id;
+    _tdmPriority = c.priority || 3; _tdmLabel = '';
+    document.getElementById('tdm-title').value = c.title || '';
+    document.getElementById('tdm-lead-name').textContent = lead ? lead.name : 'Compromisso interno';
+    document.getElementById('tdm-due-date').value = c.date || '';
+    document.getElementById('tdm-due-time').value = c.time || '';
+    document.getElementById('tdm-description').value = c.description || '';
+    _updateTdmPriorityCircle(); _updateTdmPriorityPills(); _updateTdmLabelPills();
+    _aplicarTdmOrigem();
+    document.getElementById('task-detail-modal').classList.remove('hidden');
+}
+
+function _aplicarTdmOrigem() {
+    const ehCompromisso = _tdmOrigem === 'compromisso';
+    const blocoLabel = document.getElementById('tdm-bloco-label');
+    const blocoSubtarefas = document.getElementById('tdm-bloco-subtarefas');
+    if (blocoLabel) blocoLabel.classList.toggle('hidden', ehCompromisso);
+    if (blocoSubtarefas) blocoSubtarefas.classList.toggle('hidden', ehCompromisso);
 }
 
 function _renderAgendaGroups() {
@@ -1835,9 +2158,9 @@ function _agendaGroup(title, tasks, tom) {
                 : '';
 
             return `<div class="group flex items-center gap-3 py-2.5 border-b border-zinc-900/60 last:border-0 cursor-pointer hover:bg-white/[0.03] rounded px-2 -mx-2 transition-colors"
-                         onclick="openTaskDetailModal(${task.leadId}, ${task.id})">
-                <button type="button" title="Concluir tarefa"
-                    onclick="event.stopPropagation(); toggleLeadTask(${task.leadId}, ${task.id})"
+                         onclick="abrirItemAgenda('${task.origem}', ${task.leadId}, ${task.id})">
+                <button type="button" title="Concluir"
+                    onclick="event.stopPropagation(); toggleItemAgenda('${task.origem}', ${task.leadId}, ${task.id})"
                     class="w-4 h-4 rounded-full border-2 flex-shrink-0 transition-colors hover:scale-110"
                     style="border-color:${pc.border}"></button>
 
@@ -3425,7 +3748,8 @@ async function loadDataStoreFromCloud() {
             rClients,
             rStages,
             rAportes,
-            rFatHistorico
+            rFatHistorico,
+            rCompromissos
         ] = await Promise.all([
             supabaseClient.from('users').select('*'),
             supabaseClient.from('products').select('*'),
@@ -3434,7 +3758,8 @@ async function loadDataStoreFromCloud() {
             supabaseClient.from('clients').select('*'),
             supabaseClient.from('stages').select('*'),
             supabaseClient.from('aportes').select('*'),
-            supabaseClient.from('faturamentoHistorico').select('*')
+            supabaseClient.from('faturamentoHistorico').select('*'),
+            supabaseClient.from('compromissos').select('*')
         ]);
 
         if (rUsers.error) throw rUsers.error;
@@ -3447,6 +3772,13 @@ async function loadDataStoreFromCloud() {
         if (rStages.error) throw rStages.error;
         if (rAportes.error) throw rAportes.error;
         if (rFatHistorico.error) throw rFatHistorico.error;
+        // Banco ainda sem a tabela de compromissos nao pode derrubar a agenda
+        // inteira: cai para lista vazia e as tarefas de lead seguem aparecendo.
+        const compromissosCloud = (rCompromissos && !rCompromissos.error && rCompromissos.data)
+            ? rCompromissos.data : [];
+        if (rCompromissos && rCompromissos.error) {
+            console.warn('Tabela "compromissos" indisponivel:', rCompromissos.error.message || rCompromissos.error);
+        }
 
         // Se o banco cloud não estiver migrado, usar dados locais
         if (!rUsers.data?.length || !rLeads.data?.length) {
@@ -3463,6 +3795,7 @@ async function loadDataStoreFromCloud() {
             stages: rStages.data || [],
             aportes: rAportes.data || [],
             faturamentoHistorico: rFatHistorico.data || [],
+            compromissos: compromissosCloud,
             logs: localLogs
         };
 
