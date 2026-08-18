@@ -1605,13 +1605,29 @@ function setAgendaFiltroAgente(valor) {
     renderAgendaView();
 }
 
+// Quantos eventos cabem na célula do dia antes de virar "+N". Mais que isso
+// e o mês vira uma parede de texto ilegível.
+const AGENDA_EVENTOS_POR_DIA = 3;
+
 function _renderAgendaMonthCalendar() {
     const container = document.getElementById('agenda-month-calendar');
     if (!container) return;
     const year = _agendaCalendarRef.getFullYear();
     const month = _agendaCalendarRef.getMonth();
     const todayStr = _dataLocalISO();
-    const allTaskDates = db.leads.flatMap(l => (l.tasks || []).filter(t => !t.completed).map(t => t.dueDate));
+
+    // Agrupa por dia respeitando o filtro de assessor: lendo db.leads direto o
+    // calendário marcava dias de tarefas que a lista abaixo nem mostrava.
+    const porDia = {};
+    _agendaTarefasVisiveis()
+        .filter(t => !t.completed && t.dueDate)
+        .forEach(t => (porDia[t.dueDate] = porDia[t.dueDate] || []).push(t));
+    // Quem tem hora marcada vem antes; empate, a prioridade decide.
+    Object.values(porDia).forEach(lista => lista.sort((a, b) => {
+        const ha = a.dueTime || '99:99', hb = b.dueTime || '99:99';
+        if (ha !== hb) return ha.localeCompare(hb);
+        return (a.priority || 4) - (b.priority || 4);
+    }));
 
     const firstOfMonth = new Date(year, month, 1);
     const startWeekday = firstOfMonth.getDay();
@@ -1625,13 +1641,32 @@ function _renderAgendaMonthCalendar() {
         const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         const isToday = ds === todayStr;
         const isSelected = ds === _agendaSelectedDate;
-        const hasTasks = allTaskDates.includes(ds);
+        const doDia = porDia[ds] || [];
         let cellClass = 'border border-zinc-800/60 hover:border-cyan-500/50';
         if (isToday) cellClass += ' bg-rose-500/10 border-rose-500/40';
         if (isSelected) cellClass += ' ring-2 ring-cyan-400';
-        cells += `<div class="${cellClass} rounded-lg p-1.5 h-16 flex flex-col cursor-pointer transition-colors" onclick="_selectAgendaDate('${ds}')">
-            <span class="text-[10px] font-mono ${isToday ? 'text-rose-400 font-bold' : 'text-zinc-400'}">${day}</span>
-            ${hasTasks ? `<span class="w-1.5 h-1.5 rounded-full bg-cyan-500 mt-auto"></span>` : ''}
+
+        const eventos = doDia.slice(0, AGENDA_EVENTOS_POR_DIA).map(t => {
+            const pc = TASK_PRIORITY_CFG[t.priority || 4];
+            const tipo = tipoTarefa(t);
+            const dica = `${t.dueTime ? t.dueTime + ' · ' : ''}${tipo.rotulo}: ${t.text} — ${t.leadName}`;
+            const hora = t.dueTime ? `<span class="shrink-0 text-zinc-400">${escapeHtml(t.dueTime)}</span>` : '';
+            return `<div title="${escapeHtml(dica)}"
+                         onclick="event.stopPropagation(); openTaskDetailModal(${t.leadId}, ${t.id})"
+                         class="flex items-center gap-1 rounded-sm bg-white/[0.04] hover:bg-white/[0.12] pl-1 pr-1 py-0.5 font-mono text-[10px] leading-[1.3] text-zinc-300 transition-colors"
+                         style="border-left:2px solid ${pc.border}">
+                ${hora}<span class="truncate">${escapeHtml(t.text)}</span>
+            </div>`;
+        }).join('');
+
+        const excedente = doDia.length - AGENDA_EVENTOS_POR_DIA;
+        const mais = excedente > 0
+            ? `<div class="px-1 pt-0.5 font-mono text-[10px] leading-[1.3] text-cyan-400/80">… +${excedente}</div>`
+            : '';
+
+        cells += `<div class="${cellClass} rounded-lg p-1.5 h-32 flex flex-col cursor-pointer transition-colors overflow-hidden" onclick="_selectAgendaDate('${ds}')">
+            <span class="text-[11px] font-mono px-0.5 ${isToday ? 'text-rose-400 font-bold' : 'text-zinc-400'}">${day}</span>
+            <div class="mt-1 flex flex-col gap-0.5 min-h-0">${eventos}${mais}</div>
         </div>`;
     }
 
