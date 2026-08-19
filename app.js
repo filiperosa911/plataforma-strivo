@@ -951,12 +951,16 @@ function openLeadModal(leadId) {
         renderLeadTasks(lead.id);
         renderLeadAttachments(lead.id);
         renderLeadNotes(lead.id);
+        const botaoExcluirLead = document.getElementById('lead-modal-delete');
+        if (botaoExcluirLead) botaoExcluirLead.classList.toggle('hidden', !podeExcluirLead(lead));
         const notaCampo = document.getElementById('new-lead-note');
         if (notaCampo) notaCampo.value = '';
         document.getElementById('add-note-container')?.classList.remove('hidden');
     } else {
         document.getElementById('lead-modal-title').innerText = "Novo Lead";
         document.getElementById('lead-modal-id').value = '';
+        // Excluir só faz sentido sobre um lead que já existe.
+        document.getElementById('lead-modal-delete')?.classList.add('hidden');
         document.getElementById('lead-modal-name').value = '';
         document.getElementById('lead-modal-value').value = '100000';
         document.getElementById('lead-modal-phone').value = '';
@@ -1175,6 +1179,97 @@ function setCRMView(viewMode) {
     }
     
     renderCRM();
+}
+
+// ----------------- EXCLUSÃO DE LEAD -----------------
+
+// O que fica pendurado no lead. Aporte e compromisso têm FK com ON DELETE SET
+// NULL, então tecnicamente nada quebra — mas o aporte perde a origem e a
+// comissão dele fica sem rastro de onde veio. Por isso a contagem vem antes.
+function _vinculosDoLead(lead) {
+    if (!lead) return { aportes: 0, cliente: null, compromissos: 0, temHistorico: false };
+    const aportes = (db.aportes || []).filter(a => a.leadId === lead.id);
+    const cliente = lead.clientCode
+        ? (db.clients || []).find(c => c.code === lead.clientCode) || { code: lead.clientCode }
+        : null;
+    const compromissos = _compromissos().filter(c => c.leadId === lead.id).length;
+    return {
+        aportes: aportes.length,
+        valorAportes: aportes.reduce((soma, a) => soma + (Number(a.value) || 0), 0),
+        cliente,
+        compromissos,
+        temHistorico: aportes.length > 0 || !!cliente
+    };
+}
+
+function podeExcluirLead(lead) {
+    if (!lead) return false;
+    if (currentRole === 'diretoria' || currentRole === 'admin') return true;
+    // Assessor mexe no próprio; liderança, no de quem responde a ela.
+    return getVisibleUserIds().includes(lead.agentId);
+}
+
+function excluirLeadAtual() {
+    const idVal = document.getElementById('lead-modal-id').value;
+    if (!idVal) return;
+    excluirLead(parseInt(idVal));
+}
+
+function excluirLead(leadId) {
+    const lead = db.leads.find(l => l.id === leadId);
+    if (!lead) return;
+
+    if (!podeExcluirLead(lead)) {
+        alert('Você não tem permissão para excluir este lead.');
+        return;
+    }
+
+    const v = _vinculosDoLead(lead);
+    const ehDiretoria = currentRole === 'diretoria' || currentRole === 'admin';
+
+    if (v.temHistorico) {
+        // Lead que virou cliente ou recebeu aporte é histórico financeiro: some
+        // do funil, mas o dinheiro que ele gerou continua nos rateios.
+        if (!ehDiretoria) {
+            alert(
+                `"${lead.name}" não pode ser excluído por você: já tem ${_descreverVinculosLead(v)}.\n\n` +
+                `Só a diretoria pode excluir um lead com histórico financeiro.`
+            );
+            return;
+        }
+        const aviso =
+            `ATENÇÃO — "${lead.name}" tem ${_descreverVinculosLead(v)}.\n\n` +
+            `Excluir o lead NÃO apaga o cliente nem os aportes: eles continuam valendo nas ` +
+            `comissões e nos rateios, só perdem o vínculo com a origem.\n\n` +
+            `Tem certeza de que quer excluir mesmo assim?`;
+        if (!confirm(aviso)) return;
+        if (!confirm(`Confirmação final: excluir "${lead.name}" do funil?`)) return;
+    } else {
+        if (!confirm(`Excluir o lead "${lead.name}"? Tarefas, notas e anexos dele vão junto.`)) return;
+    }
+
+    db.leads = db.leads.filter(l => l.id !== leadId);
+    // Compromissos avulsos ficam órfãos do lead: viram internos em vez de sumir
+    // da agenda de quem ia à reunião.
+    _compromissos().forEach(c => { if (c.leadId === leadId) c.leadId = null; });
+
+    salvar({ leads: [] });
+    // O upsert nunca remove linha: sem isto o lead voltaria da nuvem.
+    remover('leads', 'id', leadId);
+    logSystem(`Lead excluído: ${lead.name} (${formatCurrency(lead.value)})`);
+
+    closeLeadModal();
+    renderCRM();
+    const agendaView = document.getElementById('view-agenda');
+    if (agendaView && !agendaView.classList.contains('hidden')) renderAgendaView();
+}
+
+function _descreverVinculosLead(v) {
+    return [
+        v.cliente ? `cliente ${v.cliente.code}` : '',
+        v.aportes ? `${v.aportes} aporte(s) somando ${formatCurrency(v.valorAportes)}` : '',
+        v.compromissos ? `${v.compromissos} compromisso(s)` : '',
+    ].filter(Boolean).join(' e ');
 }
 
 // Lead Tasks Logic
