@@ -85,7 +85,11 @@ CREATE TABLE IF NOT EXISTS "leads" (
     "clientCode" TEXT,
     "createdDate" TEXT NOT NULL,
     "attachments" JSONB NOT NULL DEFAULT '[]'::jsonb,
-    "tasks" JSONB NOT NULL DEFAULT '[]'::jsonb
+    "tasks" JSONB NOT NULL DEFAULT '[]'::jsonb,
+    -- Anotacoes de reuniao: cada item e {id, text, authorId, authorName,
+    -- createdAt}. Historico, nao campo unico — reescrever por cima apagaria o
+    -- que foi dito na reuniao anterior.
+    "notes" JSONB NOT NULL DEFAULT '[]'::jsonb
 );
 
 -- Habilitar RLS para leads
@@ -525,3 +529,9 @@ BEGIN
             ALTER COLUMN "performanceFee" SET NOT NULL;
     END IF;
 END $$;
+
+
+-- 2026-08-19 — "notes" em leads: historico de anotacoes de reuniao.
+-- O CREATE TABLE acima usa IF NOT EXISTS, entao em banco ja provisionado so
+-- este ALTER aplica a coluna. Idempotente.
+ALTER TABLE "leads" ADD COLUMN IF NOT EXISTS "notes" JSONB NOT NULL DEFAULT '[]'::jsonb;

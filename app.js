@@ -140,7 +140,11 @@ function renderSidebar() {
             <div class="font-mono text-[9px] text-zinc-500 mt-1 uppercase flex items-center gap-2">
                 ${user.email}
             </div>
-            <div class="mt-2">${roleBadge}</div>
+            <div class="mt-2 flex items-center justify-between gap-2">
+                ${roleBadge}
+                <button type="button" onclick="abrirTrocaSenha()"
+                    class="font-mono text-[9px] uppercase tracking-wider text-zinc-500 hover:text-cyan-400 transition-colors">Alterar senha</button>
+            </div>
         `;
 
         // Toggle Ajustes Funil (Settings) visibility based on role
@@ -153,11 +157,11 @@ function renderSidebar() {
             }
         }
 
-        // Motor Rateios e Aprovações estão fora da v1: exclusivos do admin.
+        // Motor Rateios e Aprovações ficam só com o dono do CRM.
         ['sidebar-link-financial', 'sidebar-link-approvals'].forEach(id => {
             const link = document.getElementById(id);
             if (!link) return;
-            link.classList.toggle('hidden', !isAdmin(user.role));
+            link.classList.toggle('hidden', !podeVerViewsRestritas(user));
         });
     }
 }
@@ -165,6 +169,17 @@ function renderSidebar() {
 // Views que ainda não entram na entrega ao cliente. Centralizado aqui para o
 // dia em que forem liberadas ser um lugar só.
 const VIEWS_SOMENTE_ADMIN = ['financial', 'approvals'];
+
+// Motor Rateios e Aprovações são exclusivas do Filipe até segunda ordem. A
+// trava é por identidade e não por papel: um segundo admin no futuro não deve
+// herdar essas telas só por ser admin. Para liberar alguém, some o login aqui.
+const DONOS_VIEWS_RESTRITAS = ['filipe.rosa'];
+
+function podeVerViewsRestritas(user) {
+    const u = user || db.users.find(x => x.id === currentUserId);
+    if (!u) return false;
+    return DONOS_VIEWS_RESTRITAS.includes(String(u.username || '').toLowerCase());
+}
 
 function isAdmin(role) {
     return (role || currentRole) === 'admin';
@@ -219,7 +234,7 @@ function switchView(viewId) {
 
     // Esconder o link da sidebar não basta: switchView é global e chamável pelo
     // console, e os módulos seguem no HTML.
-    if (VIEWS_SOMENTE_ADMIN.includes(viewId) && !isAdmin()) {
+    if (VIEWS_SOMENTE_ADMIN.includes(viewId) && !podeVerViewsRestritas()) {
         switchView('crm');
         return;
     }
@@ -890,9 +905,13 @@ function openLeadModal(leadId) {
     // levantamento com o cliente) — e, sem estarem na lista, o default
     // agentSelect.value = currentUserId não casava com opção nenhuma: o select
     // ficava vazio, agentId virava NaN e o lead nascia invisível para todos.
-    const visibleUsers = db.users.filter(u => ['agente', 'lideranca', 'diretoria', 'admin'].includes(u.role));
+    // Parceiro desativado sai da lista de escolha, mas continua listado se for
+    // o dono atual deste lead: sem a opção, salvar trocaria o dono sozinho.
+    const visibleUsers = db.users
+        .filter(u => ['agente', 'lideranca', 'diretoria', 'admin'].includes(u.role))
+        .filter(u => usuarioAtivo(u) || (lead && lead.agentId === u.id));
     agentSelect.innerHTML = visibleUsers
-        .map(u => `<option value="${u.id}">${escapeHtml(u.name)} (${escapeHtml(u.role.toUpperCase())})</option>`).join('');
+        .map(u => `<option value="${u.id}">${escapeHtml(u.name)} (${escapeHtml(u.role.toUpperCase())})${usuarioAtivo(u) ? '' : ' — INATIVO'}</option>`).join('');
 
     // Funil do lead (ou o ativo, se for novo) e as etapas correspondentes.
     const funilDoModal = lead ? _funilDoLead(lead) : currentPipelineId;
@@ -931,6 +950,10 @@ function openLeadModal(leadId) {
         if (attachmentForm) attachmentForm.classList.remove('hidden');
         renderLeadTasks(lead.id);
         renderLeadAttachments(lead.id);
+        renderLeadNotes(lead.id);
+        const notaCampo = document.getElementById('new-lead-note');
+        if (notaCampo) notaCampo.value = '';
+        document.getElementById('add-note-container')?.classList.remove('hidden');
     } else {
         document.getElementById('lead-modal-title').innerText = "Novo Lead";
         document.getElementById('lead-modal-id').value = '';
@@ -953,6 +976,11 @@ function openLeadModal(leadId) {
         }
         if (attachmentsList) {
             attachmentsList.innerHTML = `<div class="py-4 text-center text-zinc-500 font-mono text-[10px]">Salve o lead primeiro para anexar arquivos.</div>`;
+        }
+        document.getElementById('add-note-container')?.classList.add('hidden');
+        const notesList = document.getElementById('lead-notes-list');
+        if (notesList) {
+            notesList.innerHTML = `<div class="py-4 text-center text-zinc-500 font-mono text-[10px]">Salve o lead primeiro para anotar.</div>`;
         }
     }
 
@@ -1094,6 +1122,7 @@ function saveLead(event) {
             extraInfo: extraInfo,
             attachments: [],
             tasks: [],
+            notes: [],
             clientCode: clientCode
         };
         db.leads.push(novoLead);
@@ -1313,6 +1342,9 @@ function toggleLeadTask(leadId, taskId) {
     const task = lead.tasks.find(t => t.id === taskId);
     if (!task) return;
     task.completed = !task.completed;
+    // Sem o carimbo não dá para dizer "concluída ontem" nem separar o que
+    // saiu esta semana do que foi fechado há dois meses.
+    task.completedAt = task.completed ? new Date().toISOString() : null;
     salvar({ leads: [lead] });
     logSystem(`Tarefa "${task.text}" no lead "${lead.name}" marcada como ${task.completed ? 'CONCLUÍDA' : 'PENDENTE'}`);
     renderLeadTasks(leadId);
@@ -1624,6 +1656,7 @@ function _renderAgendaFiltroAgente() {
     const opcoes = [`<option value="">Todos os assessores</option>`]
         .concat(db.users
             .filter(u => visibleIds.includes(u.id))
+            .filter(u => usuarioAtivo(u) || _agendaFiltroAgente === u.id)
             .sort((a, b) => a.name.localeCompare(b.name))
             .map(u => `<option value="${u.id}" ${_agendaFiltroAgente === u.id ? 'selected' : ''}>${escapeHtml(u.name)}</option>`))
         .join('');
@@ -1808,6 +1841,7 @@ function _compromissoComoItem(c) {
         type: c.type || 'reuniao',
         priority: c.priority || 3,
         completed: !!c.completed,
+        completedAt: c.completedAt || null,
         subtasks: [],
         label: '',
         origem: 'compromisso',
@@ -1857,6 +1891,7 @@ function toggleCompromisso(id) {
     const c = _compromissos().find(x => x.id === id);
     if (!c) return;
     c.completed = !c.completed;
+    c.completedAt = c.completed ? new Date().toISOString() : null;
     salvar({ compromissos: [c] });
     logSystem(`Compromisso "${c.title}" marcado como ${c.completed ? 'CONCLUÍDO' : 'PENDENTE'}`);
     renderAgendaView();
@@ -1947,7 +1982,7 @@ function _preencherNcmResponsavel() {
     if (!mandaEmTodos) { alvo.innerHTML = ''; return; }
     const visibleIds = getVisibleUserIds();
     alvo.innerHTML = db.users
-        .filter(u => visibleIds.includes(u.id))
+        .filter(u => visibleIds.includes(u.id) && usuarioAtivo(u))
         .map(u => `<option value="${u.id}" ${u.id === currentUserId ? 'selected' : ''}>${escapeHtml(u.name)}</option>`)
         .join('');
     alvo.value = String(currentUserId);
@@ -2031,9 +2066,11 @@ function _renderAgendaGroups() {
 
     if (_agendaSelectedDate) {
         const doDia = pendentes.filter(t => t.dueDate === _agendaSelectedDate);
-        container.innerHTML = doDia.length
+        const concluidasDoDia = _agendaConcluidas(_agendaSelectedDate);
+        container.innerHTML = (doDia.length
             ? _agendaGroup(_fmtAgendaDate(_agendaSelectedDate), doDia, 'dia')
-            : _agendaVazio(`Nenhuma tarefa em ${_fmtAgendaDate(_agendaSelectedDate)}.`);
+            : (concluidasDoDia ? '' : _agendaVazio(`Nenhuma tarefa em ${_fmtAgendaDate(_agendaSelectedDate)}.`))
+        ) + concluidasDoDia;
         return;
     }
 
@@ -2055,6 +2092,7 @@ function _renderAgendaGroups() {
         .join('');
 
     html += _agendaLeadsParados();
+    html += _agendaConcluidas();
 
     if (!html) html = _agendaVazio('Nenhuma tarefa pendente. Agende o próximo passo de um lead pelo funil.');
     container.innerHTML = html;
@@ -2100,6 +2138,77 @@ function _agendaLeadsParados() {
         </div>
         <p class="text-[10px] font-mono text-zinc-600 mb-3">Sem tarefa agendada — risco de esfriar sem ninguém perceber.</p>
         <div class="bg-slate-900 border border-amber-900/30 rounded-xl px-4 py-1">${linhas}</div>
+    </div>`;
+}
+
+// Janela do bloco de concluídas. Sete dias é o que interessa para prestar
+// contas da semana; mais que isso vira arquivo morto no meio da agenda.
+const AGENDA_DIAS_CONCLUIDAS = 7;
+
+function _rotuloConclusao(item) {
+    const ref = item.completedAt || (item.dueDate ? `${item.dueDate}T12:00:00` : null);
+    if (!ref) return 'concluída';
+    const d = new Date(ref);
+    if (isNaN(d)) return 'concluída';
+    const dias = _diasAte(_dataLocalISO(d));
+    if (dias === 0) return 'concluída hoje';
+    if (dias === -1) return 'concluída ontem';
+    if (dias < 0) return `concluída há ${Math.abs(dias)} dias`;
+    return 'concluída';
+}
+
+// Antes a tarefa concluída simplesmente sumia: não dava para conferir o que
+// foi feito na semana, nem desfazer um clique errado.
+function _agendaConcluidas(dataEspecifica) {
+    const limite = new Date();
+    limite.setDate(limite.getDate() - AGENDA_DIAS_CONCLUIDAS);
+    limite.setHours(0, 0, 0, 0);
+
+    const concluidas = _agendaTarefasVisiveis()
+        .filter(t => t.completed)
+        .filter(t => {
+            if (dataEspecifica) return t.dueDate === dataEspecifica;
+            const ref = t.completedAt || (t.dueDate ? `${t.dueDate}T12:00:00` : null);
+            if (!ref) return false;
+            const d = new Date(ref);
+            return !isNaN(d) && d >= limite;
+        })
+        .sort((a, b) => String(b.completedAt || b.dueDate || '').localeCompare(String(a.completedAt || a.dueDate || '')));
+
+    if (concluidas.length === 0) return '';
+
+    const chave = 'concluidas';
+    const aberto = _agendaGruposAbertos.has(chave);
+    const titulo = dataEspecifica
+        ? `Concluídas em ${_fmtAgendaDate(dataEspecifica)}`
+        : `Concluídas (${AGENDA_DIAS_CONCLUIDAS} dias)`;
+
+    const linhas = aberto ? concluidas.map(t => {
+        const tipo = tipoTarefa(t);
+        const agente = db.users.find(u => u.id === t.agentId);
+        return `<div class="group flex items-center gap-3 py-2 border-b border-zinc-900/60 last:border-0">
+            <button type="button" title="Reabrir"
+                onclick="toggleItemAgenda('${t.origem}', ${t.leadId}, ${t.id})"
+                class="w-4 h-4 rounded-full border-2 border-emerald-600 bg-emerald-600/30 flex-shrink-0 transition-transform hover:scale-110"></button>
+            <span class="shrink-0 text-sm opacity-60" title="${escapeHtml(tipo.rotulo)}">${tipo.icone}</span>
+            <div class="flex-1 min-w-0">
+                <p class="text-sm text-zinc-500 line-through truncate">${escapeHtml(t.text)}</p>
+                <p class="text-[9px] font-mono text-zinc-600 truncate mt-0.5">
+                    ${escapeHtml(t.leadName)}${agente ? ' · ' + escapeHtml(agente.name) : ''}
+                </p>
+            </div>
+            <span class="shrink-0 font-mono text-[10px] text-emerald-600/80 w-32 text-right">${escapeHtml(_rotuloConclusao(t))}</span>
+        </div>`;
+    }).join('') : '';
+
+    return `<div class="mt-8">
+        <button type="button" onclick="toggleAgendaGrupo('${chave}')"
+            class="flex items-baseline gap-2 mb-3 group">
+            <span class="font-mono text-[10px] uppercase tracking-wider text-emerald-500/80 group-hover:text-emerald-400 transition-colors">✓ ${escapeHtml(titulo)}</span>
+            <span class="font-mono text-[10px] text-zinc-600">${concluidas.length}</span>
+            <span class="font-mono text-[10px] text-zinc-600">${aberto ? '▴ ocultar' : '▾ ver'}</span>
+        </button>
+        ${aberto ? `<div class="bg-slate-900 border border-emerald-900/20 rounded-xl px-4 py-1">${linhas}</div>` : ''}
     </div>`;
 }
 
@@ -2195,6 +2304,253 @@ function _agendaGroup(title, tasks, tom) {
         </div>
         <div class="bg-slate-900 border ${cfg.borda} rounded-xl px-4 py-1">${rows}${maisLink}</div>
     </div>`;
+}
+
+// ----------------- EXCLUSÃO / DESATIVAÇÃO DE PARCEIRO -----------------
+
+// Tudo que morre junto se o usuário for apagado. O banco tem FK em leads,
+// clients e aportes: sem esta contagem o DELETE só falharia no servidor, e o
+// supabase-js devolve o erro em vez de lançar — a exclusão sumiria calada.
+function _vinculosDoUsuario(userId) {
+    const leads = db.leads.filter(l => l.agentId === userId || l.leaderId === userId).length;
+    const clientes = (db.clients || []).filter(c => c.agentId === userId || c.leaderId === userId).length;
+    const aportes = (db.aportes || []).filter(a => a.agentId === userId || a.leaderId === userId).length;
+    const subordinados = db.users.filter(u => u.parentId === userId).length;
+    const compromissos = _compromissos().filter(c => c.agentId === userId).length;
+    return {
+        leads, clientes, aportes, subordinados, compromissos,
+        total: leads + clientes + aportes + subordinados + compromissos
+    };
+}
+
+function _descreverVinculos(v) {
+    return [
+        v.leads ? `${v.leads} lead(s)` : '',
+        v.clientes ? `${v.clientes} cliente(s)` : '',
+        v.aportes ? `${v.aportes} aporte(s)` : '',
+        v.subordinados ? `${v.subordinados} subordinado(s)` : '',
+        v.compromissos ? `${v.compromissos} compromisso(s)` : '',
+    ].filter(Boolean).join(', ');
+}
+
+function excluirUsuarioAtual() {
+    const idVal = document.getElementById('user-modal-id').value;
+    if (!idVal) return;
+    const userId = parseInt(idVal);
+    const user = db.users.find(u => u.id === userId);
+    if (!user) return;
+
+    if (currentRole !== 'diretoria' && currentRole !== 'admin') {
+        alert('Apenas a Diretoria pode excluir parceiros.');
+        return;
+    }
+    // Apagar a si mesmo derruba a própria sessão e deixa o CRM sem dono.
+    if (userId === currentUserId) {
+        alert('Você não pode excluir o seu próprio usuário.');
+        return;
+    }
+
+    const v = _vinculosDoUsuario(userId);
+
+    if (v.total > 0) {
+        const querDesativar = confirm(
+            `"${user.name}" não pode ser excluído: ainda tem ${_descreverVinculos(v)} no nome dele.\n\n` +
+            `Apagar levaria o histórico comercial junto e mudaria os números de rateio.\n\n` +
+            `Deseja DESATIVAR? A pessoa some das listas e perde o acesso, e o histórico fica intacto.`
+        );
+        if (querDesativar) desativarUsuario(userId);
+        return;
+    }
+
+    if (!confirm(`Excluir "${user.name}" definitivamente? Não há nada vinculado a este usuário.`)) return;
+
+    db.users = db.users.filter(u => u.id !== userId);
+    salvar({ users: [] });
+    // O upsert nunca remove linha: sem isto o parceiro voltaria da nuvem.
+    remover('users', 'id', userId);
+    logSystem(`Parceiro excluído: ${user.name}`);
+    if (supabaseMode === 'CLOUD') {
+        alert('Perfil removido do CRM. O login dessa pessoa no servidor de autenticação precisa ser removido à parte.');
+    }
+    closeUserModal();
+    renderPartnerships();
+    renderSidebar();
+}
+
+// Desativado continua existindo para o histórico, mas sai da operação: o
+// resolve_login_email só resolve status 'active', então o acesso morre junto.
+function desativarUsuario(userId) {
+    const user = db.users.find(u => u.id === userId);
+    if (!user) return;
+    user.status = 'inactive';
+    salvar({ users: [user] });
+    logSystem(`Parceiro desativado: ${user.name}`);
+    closeUserModal();
+    renderPartnerships();
+    renderSidebar();
+}
+
+function reativarUsuario(userId) {
+    const user = db.users.find(u => u.id === userId);
+    if (!user) return;
+    user.status = 'active';
+    salvar({ users: [user] });
+    logSystem(`Parceiro reativado: ${user.name}`);
+    renderPartnerships();
+    renderSidebar();
+}
+
+function usuarioAtivo(u) {
+    return !u || u.status !== 'inactive';
+}
+
+// ----------------- TROCA DE SENHA -----------------
+
+function abrirTrocaSenha() {
+    const modal = document.getElementById('senha-modal');
+    if (!modal) return;
+    ['senha-atual', 'senha-nova', 'senha-confirma'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    _msgSenha('');
+    modal.classList.remove('hidden');
+    setTimeout(() => document.getElementById('senha-atual')?.focus(), 30);
+}
+
+function fecharTrocaSenha() {
+    document.getElementById('senha-modal')?.classList.add('hidden');
+}
+
+function _msgSenha(texto, tom) {
+    const el = document.getElementById('senha-msg');
+    if (!el) return;
+    el.textContent = texto || '';
+    el.className = `font-mono text-[10px] ${tom === 'ok' ? 'text-emerald-400' : 'text-red-400'}`;
+}
+
+async function salvarNovaSenha() {
+    const atual = document.getElementById('senha-atual').value;
+    const nova = document.getElementById('senha-nova').value;
+    const confirma = document.getElementById('senha-confirma').value;
+    const botao = document.getElementById('senha-salvar-btn');
+
+    if (!atual || !nova) { _msgSenha('Preencha a senha atual e a nova.'); return; }
+    if (nova.length < 8) { _msgSenha('A nova senha precisa de pelo menos 8 caracteres.'); return; }
+    if (nova !== confirma) { _msgSenha('A confirmação não confere com a nova senha.'); return; }
+    if (nova === atual) { _msgSenha('A nova senha é igual à atual.'); return; }
+
+    if (supabaseMode !== 'CLOUD' || !supabaseClient) {
+        _msgSenha('Sem conexão com o servidor de autenticação.');
+        return;
+    }
+
+    const eu = db.users.find(u => u.id === currentUserId);
+    if (!eu || !eu.email) { _msgSenha('Não consegui identificar o seu e-mail de acesso.'); return; }
+
+    if (botao) { botao.disabled = true; botao.textContent = 'Salvando...'; }
+    try {
+        // Confere a senha atual antes de trocar: sem isto, quem pegasse a
+        // máquina destravada trocaria a senha sem saber a antiga.
+        const conferencia = await supabaseClient.auth.signInWithPassword({ email: eu.email, password: atual });
+        if (conferencia.error) { _msgSenha('Senha atual incorreta.'); return; }
+
+        const troca = await supabaseClient.auth.updateUser({ password: nova });
+        if (troca.error) { _msgSenha(`Não foi possível trocar: ${troca.error.message}`); return; }
+
+        _msgSenha('Senha alterada. Use a nova no próximo login.', 'ok');
+        logSystem('Senha alterada pelo próprio usuário.');
+        setTimeout(fecharTrocaSenha, 1500);
+    } catch (err) {
+        _msgSenha(`Falha inesperada: ${err.message}`);
+    } finally {
+        if (botao) { botao.disabled = false; botao.textContent = 'Alterar senha'; }
+    }
+}
+
+// ----------------- NOTAS DO LEAD -----------------
+
+function _notasDoLead(lead) {
+    if (!lead) return [];
+    if (!Array.isArray(lead.notes)) lead.notes = [];
+    return lead.notes;
+}
+
+function renderLeadNotes(leadId) {
+    const container = document.getElementById('lead-notes-list');
+    if (!container) return;
+    const lead = db.leads.find(l => l.id === leadId);
+    const notas = _notasDoLead(lead);
+
+    if (notas.length === 0) {
+        container.innerHTML = `<div class="py-4 text-center text-zinc-500 font-mono text-[10px]">Nenhuma anotação ainda.</div>`;
+        return;
+    }
+
+    // Mais recente primeiro: numa reunião o que importa é o último combinado.
+    const ordenadas = [...notas].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+
+    container.innerHTML = ordenadas.map(n => {
+        const podeApagar = n.authorId === currentUserId || currentRole === 'admin' || currentRole === 'diretoria';
+        return `<div class="group border-b border-zinc-900/60 last:border-0 py-2">
+            <div class="flex items-baseline justify-between gap-2">
+                <span class="font-mono text-[9px] text-cyan-400/80">${escapeHtml(_fmtDataHoraNota(n.createdAt))} · ${escapeHtml(n.authorName || 'desconhecido')}</span>
+                ${podeApagar ? `<button type="button" onclick="deleteLeadNote(${leadId}, ${n.id})"
+                    class="opacity-0 group-hover:opacity-100 text-red-500/50 hover:text-red-400 font-mono text-[9px] transition-opacity">[ excluir ]</button>` : ''}
+            </div>
+            <p class="text-xs text-zinc-300 mt-1 whitespace-pre-wrap break-words">${escapeHtml(n.text)}</p>
+        </div>`;
+    }).join('');
+}
+
+function _fmtDataHoraNota(iso) {
+    if (!iso) return 'sem data';
+    const d = new Date(iso);
+    if (isNaN(d)) return String(iso);
+    return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function addLeadNote() {
+    const idVal = document.getElementById('lead-modal-id').value;
+    if (!idVal) { alert('Salve o lead primeiro para anotar.'); return; }
+    const leadId = parseInt(idVal);
+    const lead = db.leads.find(l => l.id === leadId);
+    if (!lead) return;
+
+    const campo = document.getElementById('new-lead-note');
+    const texto = (campo?.value || '').trim();
+    if (!texto) return;
+
+    const notas = _notasDoLead(lead);
+    const autor = db.users.find(u => u.id === currentUserId);
+    notas.push({
+        id: Date.now(),
+        text: texto,
+        authorId: currentUserId,
+        authorName: autor ? autor.name : 'desconhecido',
+        createdAt: new Date().toISOString()
+    });
+
+    salvar({ leads: [lead] });
+    logSystem(`Anotação registrada no lead "${lead.name}"`);
+    campo.value = '';
+    renderLeadNotes(leadId);
+}
+
+function deleteLeadNote(leadId, noteId) {
+    const lead = db.leads.find(l => l.id === leadId);
+    if (!lead) return;
+    const nota = _notasDoLead(lead).find(n => n.id === noteId);
+    if (!nota) return;
+    const meu = nota.authorId === currentUserId;
+    if (!meu && currentRole !== 'admin' && currentRole !== 'diretoria') {
+        alert('Só quem escreveu a anotação (ou a diretoria) pode excluí-la.');
+        return;
+    }
+    if (!confirm('Excluir esta anotação?')) return;
+    lead.notes = _notasDoLead(lead).filter(n => n.id !== noteId);
+    salvar({ leads: [lead] });
+    renderLeadNotes(leadId);
 }
 
 function _fmtAgendaDate(dateStr) {
@@ -2594,13 +2950,18 @@ function renderPartnerships() {
             else if (u.role === 'lideranca') roleBadge = `<span class="px-1.5 py-0.5 rounded text-[8px] font-mono badge-lideranca">LIDERANÇA</span>`;
             else roleBadge = `<span class="px-1.5 py-0.5 rounded text-[8px] font-mono badge-agente">AGENTE</span>`;
 
+            const inativo = !usuarioAtivo(u);
             let actions = '';
             if (isDir) {
                 actions = `<button onclick="editUserPrompt(${u.id})" class="text-[9px] font-mono text-cyan-400 hover:text-cyan-300 mr-2">[ Editar ]</button>`;
+                if (inativo) {
+                    actions += `<button onclick="reativarUsuario(${u.id})" class="text-[9px] font-mono text-emerald-400 hover:text-emerald-300">[ Reativar ]</button>`;
+                }
             }
+            if (inativo) roleBadge += ` <span class="px-1.5 py-0.5 rounded text-[8px] font-mono border border-zinc-700 text-zinc-500">INATIVO</span>`;
 
             userTbody.innerHTML += `
-                <tr class="hover:bg-slate-900/10">
+                <tr class="hover:bg-slate-900/10 ${inativo ? 'opacity-50' : ''}">
                     <td class="py-2.5 px-4 font-mono text-xs text-zinc-400">${u.id}</td>
                     <td class="py-2.5 px-4 text-zinc-200 font-semibold">
                         ${u.name}
@@ -2664,13 +3025,15 @@ function openUserModal() {
     if (!modal) return;
 
     // populate leaders select
-    const leaders = db.users.filter(u => u.role === 'lideranca');
+    const leaders = db.users.filter(u => u.role === 'lideranca' && usuarioAtivo(u));
     const leaderSelect = document.getElementById('user-modal-parent');
     leaderSelect.innerHTML = `<option value="">Nenhum (Direto)</option>` + 
         leaders.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
 
     document.getElementById('user-modal-title').innerText = "Novo Usuário";
     document.getElementById('user-modal-id').value = '';
+    // Excluir só faz sentido sobre alguém que já existe.
+    document.getElementById('user-modal-delete')?.classList.add('hidden');
     document.getElementById('user-modal-name').value = '';
     document.getElementById('user-modal-email').value = '';
     document.getElementById('user-modal-username').value = '';
@@ -2717,6 +3080,9 @@ function editUserPrompt(userId) {
     openUserModal();
     document.getElementById('user-modal-title').innerText = "Editar Usuário";
     document.getElementById('user-modal-id').value = user.id;
+    const botaoExcluir = document.getElementById('user-modal-delete');
+    // Ninguém apaga a si mesmo: derrubaria a própria sessão.
+    if (botaoExcluir) botaoExcluir.classList.toggle('hidden', user.id === currentUserId);
     document.getElementById('user-modal-name').value = user.name;
     document.getElementById('user-modal-email').value = user.email;
     document.getElementById('user-modal-role').value = user.role;

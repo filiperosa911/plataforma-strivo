@@ -75,8 +75,9 @@
                         <span>📈</span> Pipeline
                     </a>
                     <!-- Motor Rateios e Aprovações ficam fora da v1 (reunião de
-                         18/08): só o administrador enxerga. Começam ocultos e
-                         renderSidebar() decide pelo papel do usuário. -->
+                         18/08): exclusivos do Filipe até segunda ordem. Começam
+                         ocultos e renderSidebar() decide por DONOS_VIEWS_RESTRITAS,
+                         que casa o login e não o papel. -->
                     <a href="#" data-target="financial" id="sidebar-link-financial"
                         class="sidebar-link hidden">
                         <span>⚙️</span> Motor Rateios
@@ -867,6 +868,27 @@
                         </div>
                     </div>
 
+                    <!-- SEÇÃO DE NOTAS -->
+                    <div class="space-y-3">
+                        <h4 class="font-mono text-[10px] text-zinc-400 uppercase tracking-wider block font-bold">// 📝
+                            Notas / Anotações de Reunião</h4>
+
+                        <div id="add-note-container"
+                            class="bg-slate-950/40 border border-zinc-900 p-3 rounded-lg space-y-2">
+                            <textarea id="new-lead-note" rows="2"
+                                placeholder="O que ficou combinado nesta reunião..."
+                                class="w-full bg-slate-900 border border-zinc-800 rounded p-2 text-zinc-100 text-xs font-sans focus:outline-none focus:border-cyan-500 resize-none"></textarea>
+                            <button type="button" onclick="addLeadNote()"
+                                class="w-full bg-slate-900 hover:bg-zinc-800 border border-zinc-850 text-zinc-300 font-mono text-[10px] px-3 py-1.5 rounded transition-colors uppercase font-bold">
+                                + Anotar
+                            </button>
+                        </div>
+
+                        <div id="lead-notes-list" class="max-h-[200px] overflow-y-auto pr-1">
+                            <!-- Rendered dynamically -->
+                        </div>
+                    </div>
+
                     <!-- SEÇÃO DE ANEXOS -->
                     <div class="space-y-3">
                         <h4 class="font-mono text-[10px] text-zinc-400 uppercase tracking-wider block font-bold">// 📁
@@ -956,6 +978,44 @@
                 <button onclick="deleteCurrentTask()" class="text-red-500/50 hover:text-red-400 font-mono text-[9px] uppercase transition-colors mr-auto">[ Excluir ]</button>
                 <button onclick="closeTaskDetailModal()" class="border border-zinc-800 text-zinc-400 font-mono text-[9px] px-4 py-2 rounded uppercase hover:border-zinc-700 transition-colors">Cancelar</button>
                 <button onclick="saveTaskDetail()" class="bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-[9px] px-5 py-2 rounded uppercase transition-colors">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Alterar Senha -->
+    <div id="senha-modal" class="modal-overlay fixed inset-0 flex items-center justify-center z-50 hidden">
+        <div class="bg-[#0b1022] border border-zinc-800 p-6 rounded-xl w-[95%] max-w-sm space-y-4">
+            <div class="flex items-start justify-between gap-3 border-b border-zinc-800 pb-3">
+                <div>
+                    <h3 class="font-bold text-white text-base">Alterar senha</h3>
+                    <p class="text-[10px] font-mono text-zinc-500 mt-0.5">Vale para o seu próprio acesso</p>
+                </div>
+                <button type="button" onclick="fecharTrocaSenha()" class="text-zinc-500 hover:text-white font-mono text-sm flex-shrink-0">[ ✕ ]</button>
+            </div>
+
+            <div class="space-y-1.5">
+                <label class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">Senha atual</label>
+                <input id="senha-atual" type="password" autocomplete="current-password"
+                    class="w-full bg-slate-950/40 border border-zinc-900 rounded-lg p-2.5 text-zinc-200 text-sm focus:outline-none focus:border-cyan-800/50 transition-colors">
+            </div>
+            <div class="space-y-1.5">
+                <label class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">Nova senha</label>
+                <input id="senha-nova" type="password" autocomplete="new-password"
+                    class="w-full bg-slate-950/40 border border-zinc-900 rounded-lg p-2.5 text-zinc-200 text-sm focus:outline-none focus:border-cyan-800/50 transition-colors">
+                <p class="text-[9px] font-mono text-zinc-600">Mínimo de 8 caracteres.</p>
+            </div>
+            <div class="space-y-1.5">
+                <label class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">Confirmar nova senha</label>
+                <input id="senha-confirma" type="password" autocomplete="new-password"
+                    onkeydown="if(event.key==='Enter'){salvarNovaSenha()}"
+                    class="w-full bg-slate-950/40 border border-zinc-900 rounded-lg p-2.5 text-zinc-200 text-sm focus:outline-none focus:border-cyan-800/50 transition-colors">
+            </div>
+
+            <p id="senha-msg" class="font-mono text-[10px] text-red-400"></p>
+
+            <div class="flex gap-3 items-center justify-end border-t border-zinc-900 pt-4">
+                <button type="button" onclick="fecharTrocaSenha()" class="border border-zinc-800 text-zinc-400 font-mono text-[9px] px-4 py-2 rounded uppercase hover:border-zinc-700 transition-colors">Cancelar</button>
+                <button type="button" id="senha-salvar-btn" onclick="salvarNovaSenha()" class="bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-[9px] px-5 py-2 rounded uppercase transition-colors">Alterar senha</button>
             </div>
         </div>
     </div>
@@ -1122,7 +1182,9 @@
                         <!-- Options filled by JS -->
                     </select>
                 </div>
-                <div class="pt-4 flex justify-end gap-3 font-mono text-xs">
+                <div class="pt-4 flex justify-end items-center gap-3 font-mono text-xs">
+                    <button type="button" id="user-modal-delete" onclick="excluirUsuarioAtual()"
+                        class="hidden text-red-500/60 hover:text-red-400 py-2 px-2 uppercase mr-auto transition-colors">[ Excluir ]</button>
                     <button type="button" onclick="closeUserModal()"
                         class="text-zinc-500 hover:text-zinc-400 py-2 px-4 uppercase">[ Cancelar ]</button>
                     <button type="submit"
